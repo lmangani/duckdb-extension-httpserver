@@ -1,22 +1,34 @@
-# DuckDB Extension Template
-This repository contains a template for creating a DuckDB extension. The main goal of this template is to allow users to easily develop, test and distribute their own DuckDB extension. The main branch of the template is always based on the latest stable DuckDB allowing you to try out your extension right away.
+# DuckDB HTTP Server Extension
+This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.
 
-## Getting started
-First step to getting started is to create your own repo from this template by clicking `Use this template`. Then clone your new repository using 
-```sh
-git clone --recurse-submodules https://github.com/<you>/<your-new-extension-repo>.git
-```
-Note that `--recurse-submodules` will ensure DuckDB is pulled which is required to build the extension.
+### Extension Functions
+- `httpserve_start(host, port)`
+- `httpserve_stop()`
 
-## Building
-### Managing dependencies
-DuckDB extensions uses VCPKG for dependency management. Enabling VCPKG is very simple: follow the [installation instructions](https://vcpkg.io/en/getting-started) or just run the following:
-```shell
-git clone https://github.com/Microsoft/vcpkg.git
-./vcpkg/bootstrap-vcpkg.sh
-export VCPKG_TOOLCHAIN_PATH=`pwd`/vcpkg/scripts/buildsystems/vcpkg.cmake
+### Usage
+Start the HTTP server providing the `host` and `port` parameters
+```sql
+D SELECT httpserve_start('0.0.0.0',9999);
+┌─────────────────────────────────────┐
+│  httpserve_start('0.0.0.0', 9999)   │
+│               varchar               │
+├─────────────────────────────────────┤
+│ HTTP server started on 0.0.0.0:9999 │
+└─────────────────────────────────────┘
 ```
-Note: VCPKG is only required for extensions that want to rely on it for dependency management. If you want to develop an extension without dependencies, or want to do your own dependency management, just skip this step. Note that the example extension uses VCPKG to build with a dependency for instructive purposes, so when skipping this step the build may not work without removing the dependency.
+
+#### Query
+Query the endpoint using curl GET/POST requests
+```bash
+# curl -X POST -d "SELECT 42 as answer" http://localhost:9999/query
+answer
+INTEGER
+[ Rows: 1]
+42
+```
+
+<br>
+
 
 ### Build steps
 Now to build the extension, run:
