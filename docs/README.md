@@ -1,6 +1,8 @@
 # DuckDB HTTP Server Extension
-This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.
+This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
+The project goal is to replace the functionality currently offered by our project [Quackpipe](https://github.com/metrico/quackpipe)
 
+#### Screenshot
 <img src="https://github.com/user-attachments/assets/b79aa620-c81e-4469-8d56-cbef3b1a60e4" width=800 />
 
 
