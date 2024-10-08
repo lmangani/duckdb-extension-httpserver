@@ -10,6 +10,10 @@ The project goal is to replace the functionality currently offered by our projec
 - `httpserve_start(host, port)`
 - `httpserve_stop()`
 
+### API Endpoints
+- `/query` 
+- `/health`
+
 ### Usage
 Start the HTTP server providing the `host` and `port` parameters
 ```sql
