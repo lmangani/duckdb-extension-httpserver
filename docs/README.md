@@ -1,6 +1,9 @@
 # DuckDB HTTP Server Extension
 This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.
 
+<img src="https://github.com/user-attachments/assets/b79aa620-c81e-4469-8d56-cbef3b1a60e4" width=800 />
+
+
 ### Extension Functions
 - `httpserve_start(host, port)`
 - `httpserve_stop()`
