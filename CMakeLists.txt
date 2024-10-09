@@ -29,8 +29,8 @@ target_link_libraries(${LOADABLE_EXTENSION_NAME} OpenSSL::SSL OpenSSL::Crypto)
 
 if(MINGW)
   find_package(ZLIB)
-  target_link_libraries(httpfs_loadable_extension ZLIB::ZLIB -lcrypt32)
-  target_link_libraries(httpfs_extension ZLIB::ZLIB -lcrypt32)
+  target_link_libraries(${LOADABLE_EXTENSION_NAME} ZLIB::ZLIB -lcrypt32)
+  target_link_libraries(${EXTENSION_NAME} ZLIB::ZLIB -lcrypt32)
 endif()
 
 install(
