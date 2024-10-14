@@ -86,8 +86,9 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result) {
 // Convert the query result to NDJSON (JSONEachRow) format
 static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
     std::string ndjson_output;
-    
+
     for (idx_t row = 0; row < result.RowCount(); ++row) {
+        // Create a new JSON document for each row
         auto doc = yyjson_mut_doc_new(nullptr);
         auto root = yyjson_mut_obj(doc);
         yyjson_mut_doc_set_root(doc, root);
@@ -96,12 +97,13 @@ static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
             Value value = result.GetValue(col, row);
             const char* column_name = result.ColumnName(col).c_str();
 
+            // Handle null values and add them to the JSON object
             if (value.IsNull()) {
                 yyjson_mut_obj_add_null(doc, root, column_name);
             } else {
+                // Convert value to string and add it to the JSON object
                 std::string value_str = value.ToString();
-                // Correct the arguments: pass the key and value properly
-                yyjson_mut_obj_add_strn(doc, root, column_name, value_str.c_str(), value_str.length());
+                yyjson_mut_obj_add_strncpy(doc, root, column_name, value_str.c_str(), value_str.length());
             }
         }
 
@@ -114,6 +116,7 @@ static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
         ndjson_output += json_line;
         ndjson_output += "\n";
 
+        // Free allocated memory for this row
         free(json_line);
         yyjson_mut_doc_free(doc);
     }
