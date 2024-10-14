@@ -4,8 +4,7 @@
 This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
 The extension goal is to replace the functionality currently offered by [Quackpipe](https://github.com/metrico/quackpipe)
 
-![image](https://github.com/user-attachments/assets/180fdcec-2cae-4909-a7a2-28333cd7dd44)
-
+![image](https://github.com/user-attachments/assets/e930a8d2-b3e4-454e-ba12-e5e91b30bfbe)
 
 #### Extension Functions
 - `httpserve_start(host, port)`
