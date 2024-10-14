@@ -35,6 +35,7 @@ D SELECT httpserve_start('0.0.0.0',9999);
 
 #### 👉 QUERY UI
 Browse to your endpoint and use the built-in quackplay interface _(experimental)_
+
 ![image](https://github.com/user-attachments/assets/0ee751d0-7360-4d3d-949d-3fb930634ebd)
 
 #### 👉 QUERY API
