@@ -28,7 +28,7 @@ D SELECT httpserve_start('0.0.0.0',9999);
 #### Query
 Query the endpoint using curl GET/POST requests
 ```bash
-curl -X POST -d "LOAD chsql; SELECT *, uuid() FROM numbers(10)" http://localhost:9999/
+curl -X POST -d "SELECT * as number, uuid() FROM generate_series(0,9)" http://localhost:9999/
 ```
 ```json
 {"meta":[{"name":"number"},{"name":"uuid()"}],"data":[["0","6a450270-3588-42ff-81db-4b1fc8f00cf5"],["1","de8cc0a2-b1ca-4f46-9ad1-07b21903d8fd"],["2","1cae7b3b-0186-486f-9db3-9da84d2752b0"],["3","97b02542-6645-4128-b4bc-97dba8030b7c"],["4","58699c81-9bcd-435e-8e2a-6def5700517b"],["5","d7b14f00-7b61-41ee-987a-2c5326ff2019"],["6","4f355788-482e-4399-b3e5-cf1e628b2c8b"],["7","58b18db2-14c5-416f-80b8-4d04ec4e31f5"],["8","c459de79-027e-468f-93c4-a896ca885a37"],["9","f591ce48-56de-4738-a5ea-c5c6c9f46479"]],"rows":10}
