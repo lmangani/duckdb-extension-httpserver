@@ -8,6 +8,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/allocator.hpp"
+#include <chrono>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -69,8 +70,14 @@ static HttpServerState global_state;
         return "String";
     }
 
+    struct ReqStats {
+        float elapsed_sec;
+        int64_t read_bytes;
+        int64_t read_rows;
+    };
+
 // Convert the query result to JSON format
-static std::string ConvertResultToJSON(MaterializedQueryResult &result) {
+static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats &req_stats) {
     auto doc = yyjson_mut_doc_new(nullptr);
     auto root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
@@ -106,9 +113,9 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result) {
     yyjson_mut_obj_add_int(doc, root, "rows", result.RowCount());
     //"statistics":{"elapsed":0.00031403,"rows_read":1,"bytes_read":0}}
     auto stat_obj = yyjson_mut_obj_add_obj(doc, root, "statistics");
-    yyjson_mut_obj_add_real(doc, stat_obj, "elapsed", 0.01);
-    yyjson_mut_obj_add_int(doc, stat_obj, "rows_read", 1);
-    yyjson_mut_obj_add_int(doc, stat_obj, "bytes_read", 0);
+    yyjson_mut_obj_add_real(doc, stat_obj, "elapsed", req_stats.elapsed_sec);
+    yyjson_mut_obj_add_int(doc, stat_obj, "rows_read", req_stats.read_rows);
+    yyjson_mut_obj_add_int(doc, stat_obj, "bytes_read", req_stats.read_bytes);
     // Write to string
     auto data = yyjson_mut_write(doc, 0, nullptr);
     if (!data) {
@@ -170,7 +177,16 @@ static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& r
         }
 
         Connection con(*global_state.db_instance);
+        const auto& start = std::chrono::system_clock::now();
         auto result = con.Query(query);
+        const auto end = std::chrono::system_clock::now();
+
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        ReqStats req_stats{
+            static_cast<float>(elapsed.count()) / 1000,
+            0,
+            0
+        };
 
         if (result->HasError()) {
             res.status = 400;
@@ -179,7 +195,7 @@ static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& r
         }
 
         // Convert result to JSON
-        std::string json_output = ConvertResultToJSON(*result);
+        std::string json_output = ConvertResultToJSON(*result, req_stats);
         res.set_content(json_output, "application/json");
     } catch (const Exception& ex) {
         res.status = 400;
@@ -241,7 +257,10 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
         }
 
         Connection con(*global_state.db_instance);
+        auto start = std::chrono::system_clock::now();
         auto result = con.Query(query);
+        auto end = std::chrono::system_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         if (result->HasError()) {
             res.status = 500;
@@ -249,12 +268,19 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
             return;
         }
 
+
+        ReqStats stats{
+            static_cast<float>(elapsed.count()) / 1000,
+            0,
+            0
+        };
+
         // Format Options
         if (format == "JSONEachRow") {
             std::string json_output = ConvertResultToNDJSON(*result);
             res.set_content(json_output, "application/x-ndjson");
         } else if (format == "JSONCompact") {
-            std::string json_output = ConvertResultToJSON(*result);
+            std::string json_output = ConvertResultToJSON(*result, stats);
             res.set_content(json_output, "application/json");
         } else {
             // Default to NDJSON for DuckDB's own queries
