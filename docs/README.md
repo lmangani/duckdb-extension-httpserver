@@ -5,7 +5,17 @@
 
 # DuckDB HTTP Server Extension
 This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
-The extension goal is to replace the functionality currently offered by [Quackpipe](https://github.com/metrico/quackpipe)
+The extension goal is to replace the functionality currently offered by [quackpipe](https://github.com/metrico/quackpipe)
+
+### Features
+
+- Turn any [DuckDB](https://duckdb.org) instance into an **HTTP OLAP API** Server
+- Use the embedded **Play User Interface** to query and visualize data 
+- Pair with [chsql](https://community-extensions.duckdb.org/extensions/chsql.html) extension for **ClickHouse flavoured SQL**
+- Work with local and remote datasets including [MotherDuck](https://motherduck.com) 🐤
+- _100% Opensource, ready to use and extend by the Community!_
+
+<br>
 
 ![image](https://github.com/user-attachments/assets/e930a8d2-b3e4-454e-ba12-e5e91b30bfbe)
 
@@ -15,7 +25,7 @@ The extension goal is to replace the functionality currently offered by [Quackpi
 
 <br>
 
-### 📦 Installation
+### 📦 [Installation](https://community-extensions.duckdb.org/extensions/httpserver.html)
 ```sql
 INSTALL httpserver FROM community;
 LOAD httpserver;
