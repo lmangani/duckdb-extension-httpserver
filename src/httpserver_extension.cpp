@@ -113,9 +113,25 @@ static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& r
 void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
     std::string query;
 
+    // CORS allow
+    res.set_header("Access-Control-Allow-Origin", "*");
+    res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT");
+    res.set_header("Access-Control-Allow-Headers", "*");
+    res.set_header("Access-Control-Allow-Credentials", "true");
+    res.set_header("Access-Control-Max-Age", "86400");
+
+    // Handle preflight OPTIONS request
+    if (req.method == "OPTIONS") {
+        res.status = 204;  // No content
+        return;
+    }
+
     // Check if the query is in the URL parameters
     if (req.has_param("query")) {
         query = req.get_param_value("query");
+    }
+    else if (req.has_param("q")) {
+        query = req.get_param_value("q");
     }
     // If not in URL, and it's a POST request, check the body
     else if (req.method == "POST" && !req.body.empty()) {
@@ -171,6 +187,18 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port) {
     global_state.server = make_uniq<duckdb_httplib_openssl::Server>();
     global_state.is_running = true;
 
+    // CORS Preflight
+    global_state.server->Options("/",
+    [](const duckdb_httplib_openssl::Request& /*req*/, duckdb_httplib_openssl::Response& res) {
+        res.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        res.set_header("Content-Type", "text/html; charset=utf-8");
+        res.set_header("Access-Control-Allow-Headers", "*");
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Credentials", "true");
+        res.set_header("Connection", "close");
+        return duckdb_httplib_openssl::Server::HandlerResponse::Handled;
+    });
+
     // Create a new allocator for the server thread
     global_state.allocator = make_uniq<Allocator>();
 
@@ -179,7 +207,7 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port) {
     global_state.server->Post("/", HandleHttpRequest);
 
     // Health check endpoint
-    global_state.server->Get("/health", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+    global_state.server->Get("/ping", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
         res.set_content("OK", "text/plain");
     });
 
