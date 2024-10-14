@@ -100,8 +100,8 @@ static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
                 yyjson_mut_obj_add_null(doc, root, column_name);
             } else {
                 std::string value_str = value.ToString();
-                yyjson_mut_obj_add_strn(doc, root, column_name, strlen(column_name),
-                                        value_str.c_str(), value_str.length());
+                // Correct the arguments: pass the key and value properly
+                yyjson_mut_obj_add_strn(doc, root, column_name, value_str.c_str(), value_str.length());
             }
         }
 
@@ -120,7 +120,6 @@ static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
 
     return ndjson_output;
 }
-
 
 static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& res) {
     try {
