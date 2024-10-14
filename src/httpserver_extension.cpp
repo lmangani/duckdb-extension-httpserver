@@ -185,13 +185,15 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
     }
 
     // Set default format to JSONCompact
-    std::string format = "JSONCompact";
+    std::string format = "JSONEachRow";
 
     // Check for format in URL parameter or header
     if (req.has_param("default_format")) {
         format = req.get_param_value("default_format");
     } else if (req.has_header("X-ClickHouse-Format")) {
         format = req.get_header_value("X-ClickHouse-Format");
+    } else if (req.has_header("format")) {
+        format = req.get_header_value("format");
     }
 
     try {
