@@ -2,7 +2,7 @@
 
 # DuckDB HTTP Server Extension
 This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
-The extension goal is to replace the functionality currently offered by our project [Quackpipe](https://github.com/metrico/quackpipe)
+The extension goal is to replace the functionality currently offered by [Quackpipe](https://github.com/metrico/quackpipe)
 
 
 ### Extension Functions
@@ -10,8 +10,10 @@ The extension goal is to replace the functionality currently offered by our proj
 - `httpserve_stop()`
 
 ### API Endpoints
-- `/` 
-- `/ping`
+- `/` <img src="https://img.shields.io/badge/GET-GREEN"> + <img src="https://img.shields.io/badge/POST-GREEN"/>
+  - `default_format`: Supports `JSONEachRow` or `JSONCompact`
+  - `query`: DuckDB SQL query
+- `/ping` <img src="https://img.shields.io/badge/GET-GREEN">
 
 ### Usage
 Start the HTTP server providing the `host` and `port` parameters
@@ -25,13 +27,63 @@ D SELECT httpserve_start('0.0.0.0',9999);
 └─────────────────────────────────────┘
 ```
 
-#### Query
-Query the endpoint using curl GET/POST requests
+### Query
+#### UI
+Browse to your endpoint and use the built-in quackplay interface _(experimental)_
+![image](https://github.com/user-attachments/assets/0ee751d0-7360-4d3d-949d-3fb930634ebd)
+
+#### API
+Query your API endpoint using curl GET/POST requests
+
 ```bash
-curl -X POST -d "SELECT * as number, uuid() FROM generate_series(0,9)" http://localhost:9999/
+curl -X POST -d "SELECT 'hello', version()" "http://localhost:9999/?default_format=JSONCompact
 ```
 ```json
-{"meta":[{"name":"number"},{"name":"uuid()"}],"data":[["0","6a450270-3588-42ff-81db-4b1fc8f00cf5"],["1","de8cc0a2-b1ca-4f46-9ad1-07b21903d8fd"],["2","1cae7b3b-0186-486f-9db3-9da84d2752b0"],["3","97b02542-6645-4128-b4bc-97dba8030b7c"],["4","58699c81-9bcd-435e-8e2a-6def5700517b"],["5","d7b14f00-7b61-41ee-987a-2c5326ff2019"],["6","4f355788-482e-4399-b3e5-cf1e628b2c8b"],["7","58b18db2-14c5-416f-80b8-4d04ec4e31f5"],["8","c459de79-027e-468f-93c4-a896ca885a37"],["9","f591ce48-56de-4738-a5ea-c5c6c9f46479"]],"rows":10}
+{
+  "meta": [
+    {
+      "name": "'hello'",
+      "type": "String"
+    },
+    {
+      "name": "\"version\"()",
+      "type": "String"
+    }
+  ],
+  "data": [
+    [
+      "hello",
+      "v1.1.1"
+    ]
+  ],
+  "rows": 1,
+  "statistics": {
+    "elapsed": 0.01,
+    "rows_read": 1,
+    "bytes_read": 0
+  }
+}
+```
+
+You can also have DuckDB instances query each other
+
+```sql
+D LOAD json;
+D LOAD httpfs;
+D SELECT httpserve_start('0.0.0.0', 9999);
+┌─────────────────────────────────────┐
+│  httpserve_start('0.0.0.0', 9999)   │
+│               varchar               │
+├─────────────────────────────────────┤
+│ HTTP server started on 0.0.0.0:9999 │
+└─────────────────────────────────────┘
+D SELECT * FROM read_json_auto('http://localhost:9999/?q=SELECT version()');
+┌─────────────┐
+│ "version"() │
+│   varchar   │
+├─────────────┤
+│ v1.1.1      │
+└─────────────┘
 ```
 
 <br>
@@ -54,16 +106,6 @@ The main binaries that will be built are:
 
 ## Running the extension
 To run the extension code, simply start the shell with `./build/release/duckdb`. This shell will have the extension pre-loaded.  
-
-```
-D SELECT httpserve_start('0.0.0.0',9999);
-┌─────────────────────────────────────┐
-│  httpserve_start('0.0.0.0', 9999)   │
-│               varchar               │
-├─────────────────────────────────────┤
-│ HTTP server started on 0.0.0.0:9999 │
-└─────────────────────────────────────┘
-```
 
 ## Running the tests
 Different tests can be created for DuckDB extensions. The primary way of testing DuckDB extensions should be the SQL tests in `./test/sql`. These SQL tests can be run using:
