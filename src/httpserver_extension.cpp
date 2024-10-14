@@ -18,6 +18,7 @@
 #include <thread>
 #include <memory>
 #include <cstdlib>
+#include "play.h"
 
 using namespace duckdb_yyjson; // NOLINT
 
@@ -179,8 +180,8 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
     }
     // If no query found, return an error
     else {
-        res.status = 400;
-        res.set_content("No query provided", "text/plain");
+        res.status = 200;
+        res.set_content(playContent, "text/html");
         return;
     }
 
