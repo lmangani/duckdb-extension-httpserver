@@ -83,6 +83,7 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result) {
     return json_output;
 }
 
+
 static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& res) {
     try {
         if (!global_state.db_instance) {
@@ -108,6 +109,59 @@ static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& r
 }
 
 
+// Handle both GET and POST requests
+void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+    std::string query;
+
+    // Check if the query is in the URL parameters
+    if (req.has_param("query")) {
+        query = req.get_param_value("query");
+    }
+    // If not in URL, and it's a POST request, check the body
+    else if (req.method == "POST" && !req.body.empty()) {
+        query = req.body;
+    }
+    // If no query found, return an error
+    else {
+        res.status = 400;
+        res.set_content("No query provided", "text/plain");
+        return;
+    }
+
+    // Set default format to JSONCompact
+    std::string format = "JSONCompact";
+
+    // Check for format in URL parameter or header
+    if (req.has_param("default_format")) {
+        format = req.get_param_value("default_format");
+    } else if (req.has_header("X-ClickHouse-Format")) {
+        format = req.get_header_value("X-ClickHouse-Format");
+    }
+
+    try {
+        if (!global_state.db_instance) {
+            throw IOException("Database instance not initialized");
+        }
+
+        Connection con(*global_state.db_instance);
+        auto result = con.Query(query);
+
+        if (result->HasError()) {
+            res.status = 500;
+            res.set_content(result->GetError(), "text/plain");
+            return;
+        }
+
+        // Convert result to JSON
+        std::string json_output = ConvertResultToJSON(*result);
+        res.set_content(json_output, "application/json");
+    } catch (const Exception& ex) {
+        res.status = 500;
+        std::string error_message = "Code: 59, e.displayText() = DB::Exception: " + std::string(ex.what());
+        res.set_content(error_message, "text/plain");
+    }
+}
+
 void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port) {
     if (global_state.is_running) {
         throw IOException("HTTP server is already running");
@@ -120,27 +174,9 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port) {
     // Create a new allocator for the server thread
     global_state.allocator = make_uniq<Allocator>();
 
-    // Handle GET requests
-    global_state.server->Get("/query", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
-        if (!req.has_param("q")) {
-            res.status = 400;
-            res.set_content("Missing query parameter 'q'", "text/plain");
-            return;
-        }
-
-        auto query = req.get_param_value("q");
-        HandleQuery(query, res);
-    });
-
-    // Handle POST requests
-    global_state.server->Post("/query", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
-        if (req.body.empty()) {
-            res.status = 400;
-            res.set_content("Empty query body", "text/plain");
-            return;
-        }
-        HandleQuery(req.body, res);
-    });
+    // Handle GET and POST requests
+    global_state.server->Get("/", HandleHttpRequest);
+    global_state.server->Post("/", HandleHttpRequest);
 
     // Health check endpoint
     global_state.server->Get("/health", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
