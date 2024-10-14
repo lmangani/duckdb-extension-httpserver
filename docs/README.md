@@ -4,16 +4,21 @@
 This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
 The extension goal is to replace the functionality currently offered by [Quackpipe](https://github.com/metrico/quackpipe)
 
-
-### Extension Functions
+#### Extension Functions
 - `httpserve_start(host, port)`
 - `httpserve_stop()`
 
-### API Endpoints
+#### API Endpoints
 - `/` `GET`, `POST`
   - `default_format`: Supports `JSONEachRow` or `JSONCompact`
   - `query`: Supports DuckDB SQL queries
 - `/ping` `GET`
+
+### Installation
+```sql
+INSTALL httpserver FROM community;
+LOAD httpserver;
+```
 
 ### Usage
 Start the HTTP server providing the `host` and `port` parameters
@@ -27,12 +32,11 @@ D SELECT httpserve_start('0.0.0.0',9999);
 └─────────────────────────────────────┘
 ```
 
-### Query
-#### UI
+#### QUERY UI
 Browse to your endpoint and use the built-in quackplay interface _(experimental)_
 ![image](https://github.com/user-attachments/assets/0ee751d0-7360-4d3d-949d-3fb930634ebd)
 
-#### API
+#### QUERY API
 Query your API endpoint using curl GET/POST requests
 
 ```bash
@@ -65,7 +69,7 @@ curl -X POST -d "SELECT 'hello', version()" "http://localhost:9999/?default_form
 }
 ```
 
-You can also have DuckDB instances query each other
+You can also have DuckDB instances query each other using `NDJSON`
 
 ```sql
 D LOAD json;
