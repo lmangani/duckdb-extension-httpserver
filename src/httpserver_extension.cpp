@@ -83,6 +83,46 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result) {
     return json_output;
 }
 
+// Convert the query result to NDJSON (JSONEachRow) format
+static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
+    std::string ndjson_output;
+
+    for (idx_t row = 0; row < result.RowCount(); ++row) {
+        // Create a new JSON document for each row
+        auto doc = yyjson_mut_doc_new(nullptr);
+        auto root = yyjson_mut_obj(doc);
+        yyjson_mut_doc_set_root(doc, root);
+
+        for (idx_t col = 0; col < result.ColumnCount(); ++col) {
+            Value value = result.GetValue(col, row);
+            const char* column_name = result.ColumnName(col).c_str();
+
+            // Handle null values and add them to the JSON object
+            if (value.IsNull()) {
+                yyjson_mut_obj_add_null(doc, root, column_name);
+            } else {
+                // Convert value to string and add it to the JSON object
+                std::string value_str = value.ToString();
+                yyjson_mut_obj_add_strncpy(doc, root, column_name, value_str.c_str(), value_str.length());
+            }
+        }
+
+        char *json_line = yyjson_mut_write(doc, 0, nullptr);
+        if (!json_line) {
+            yyjson_mut_doc_free(doc);
+            throw InternalException("Failed to render a row as JSON, yyjson failed");
+        }
+
+        ndjson_output += json_line;
+        ndjson_output += "\n";
+
+        // Free allocated memory for this row
+        free(json_line);
+        yyjson_mut_doc_free(doc);
+    }
+
+    return ndjson_output;
+}
 
 static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& res) {
     try {
@@ -145,13 +185,15 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
     }
 
     // Set default format to JSONCompact
-    std::string format = "JSONCompact";
+    std::string format = "JSONEachRow";
 
     // Check for format in URL parameter or header
     if (req.has_param("default_format")) {
         format = req.get_param_value("default_format");
     } else if (req.has_header("X-ClickHouse-Format")) {
         format = req.get_header_value("X-ClickHouse-Format");
+    } else if (req.has_header("format")) {
+        format = req.get_header_value("format");
     }
 
     try {
@@ -168,9 +210,19 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
             return;
         }
 
-        // Convert result to JSON
-        std::string json_output = ConvertResultToJSON(*result);
-        res.set_content(json_output, "application/json");
+        // Format Options
+        if (format == "JSONEachRow") {
+            std::string json_output = ConvertResultToNDJSON(*result);
+            res.set_content(json_output, "application/x-ndjson");
+        } else if (format == "JSONCompact") {
+            std::string json_output = ConvertResultToJSON(*result);
+            res.set_content(json_output, "application/json");
+        } else {
+            // Default to NDJSON for DuckDB's own queries
+            std::string json_output = ConvertResultToNDJSON(*result);
+            res.set_content(json_output, "application/x-ndjson");
+        }
+        
     } catch (const Exception& ex) {
         res.status = 500;
         std::string error_message = "Code: 59, e.displayText() = DB::Exception: " + std::string(ex.what());
