@@ -73,7 +73,7 @@ curl -X POST -d "SELECT 'hello', version()" "http://localhost:9999/?default_form
 
 #### 👉 CROSS-OVER EXAMPLES
 
- 👉 You can now have DuckDB instances query each other and... _themselves!_
+You can now have DuckDB instances query each other and... _themselves!_
 
 ```sql
 D LOAD json;
