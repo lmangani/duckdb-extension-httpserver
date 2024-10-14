@@ -10,22 +10,18 @@ The extension goal is to replace the functionality currently offered by [Quackpi
 ![image](https://github.com/user-attachments/assets/e930a8d2-b3e4-454e-ba12-e5e91b30bfbe)
 
 #### Extension Functions
-- `httpserve_start(host, port)`
-- `httpserve_stop()`
+- `httpserve_start(host, port)`: starts the server using provided parameters
+- `httpserve_stop()`: stops the server thread
 
-#### API Endpoints
-- `/` `GET`, `POST`
-  - `default_format`: Supports `JSONEachRow` or `JSONCompact`
-  - `query`: Supports DuckDB SQL queries
-- `/ping` `GET`
+<br>
 
-### Installation
+### 📦 Installation
 ```sql
 INSTALL httpserver FROM community;
 LOAD httpserver;
 ```
 
-### Usage
+### 🔌 Usage
 Start the HTTP server providing the `host` and `port` parameters
 ```sql
 D SELECT httpserve_start('0.0.0.0',9999);
@@ -37,11 +33,11 @@ D SELECT httpserve_start('0.0.0.0',9999);
 └─────────────────────────────────────┘
 ```
 
-#### QUERY UI
+#### 👉 QUERY UI
 Browse to your endpoint and use the built-in quackplay interface _(experimental)_
 ![image](https://github.com/user-attachments/assets/0ee751d0-7360-4d3d-949d-3fb930634ebd)
 
-#### QUERY API
+#### 👉 QUERY API
 Query your API endpoint using curl GET/POST requests
 
 ```bash
@@ -74,7 +70,7 @@ curl -X POST -d "SELECT 'hello', version()" "http://localhost:9999/?default_form
 }
 ```
 
-You can also have DuckDB instances query each other using `NDJSON`
+ 👉 You can also have DuckDB instances query each other and... _themselves!_
 
 ```sql
 D LOAD json;
@@ -97,28 +93,38 @@ D SELECT * FROM read_json_auto('http://localhost:9999/?q=SELECT version()');
 
 <br>
 
+### API Documentation
+
+#### Endpoints Overview
+
+| Endpoint | Methods | Description |
+|----------|---------|-------------|
+| `/`      | GET, POST | Query API endpoint |
+| `/ping`  | GET       | Health check endpoint |
+
+#### Detailed Endpoint Specifications
+
+##### Query API
+
+**Methods:** `GET`, `POST`
+
+**Parameters:**
+
+| Parameter | Description | Supported Values |
+|-----------|-------------|-------------------|
+| `default_format` | Specifies the output format | `JSONEachRow`, `JSONCompact` |
+| `query` | The DuckDB SQL query to execute | Any valid DuckDB SQL query |
+
+##### Notes
+
+- Ensure that your queries are properly formatted and escaped when sending them as part of the request.
+- The root endpoint (`/`) supports both GET and POST methods, but POST is recommended for complex queries or when the query length exceeds URL length limitations.
+- Always specify the `default_format` parameter to ensure consistent output formatting.
+
 <br>
 
-### Build steps
-Now to build the extension, run:
-```sh
-make
-```
-The main binaries that will be built are:
-```sh
-./build/release/duckdb
-./build/release/test/unittest
-./build/release/extension/<extension_name>/<extension_name>.duckdb_extension
-```
-- `duckdb` is the binary for the duckdb shell with the extension code automatically loaded. 
-- `unittest` is the test runner of duckdb. Again, the extension is already linked into the binary.
-- `<extension_name>.duckdb_extension` is the loadable binary as it would be distributed.
+##### :black_joker: Disclaimers 
 
-## Running the extension
-To run the extension code, simply start the shell with `./build/release/duckdb`. This shell will have the extension pre-loaded.  
-
-## Running the tests
-Different tests can be created for DuckDB extensions. The primary way of testing DuckDB extensions should be the SQL tests in `./test/sql`. These SQL tests can be run using:
-```sh
-make test
-```
+[^1]: DuckDB ® is a trademark of DuckDB Foundation. All rights reserved by their respective owners. [^1]
+[^2]: ClickHouse ® is a trademark of ClickHouse Inc. No direct affiliation or endorsement. [^2]
+[^3]: Released under the MIT license. See LICENSE for details. All rights reserved by their respective owners. [^3]
