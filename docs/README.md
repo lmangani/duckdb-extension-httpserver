@@ -13,7 +13,7 @@ The extension goal is to replace the functionality currently offered by our proj
 - `httpserve_stop()`
 
 ### API Endpoints
-- `/query` 
+- `/` 
 - `/health`
 
 ### Usage
