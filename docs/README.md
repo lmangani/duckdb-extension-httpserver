@@ -71,7 +71,9 @@ curl -X POST -d "SELECT 'hello', version()" "http://localhost:9999/?default_form
 }
 ```
 
- 👉 You can also have DuckDB instances query each other and... _themselves!_
+#### 👉 CROSS-OVER EXAMPLES
+
+ 👉 You can now have DuckDB instances query each other and... _themselves!_
 
 ```sql
 D LOAD json;
@@ -91,6 +93,19 @@ D SELECT * FROM read_json_auto('http://localhost:9999/?q=SELECT version()');
 │ v1.1.1      │
 └─────────────┘
 ```
+
+#### Flock Macro by @carlopi
+Check out this flocking macro from fellow _Italo-Amsterdammer_ @carlopi @ DuckDB Labs
+
+![image](https://github.com/user-attachments/assets/b409ec0e-86e0-4a8d-822c-377ddbae524d)
+
+* a DuckDB CLI, running httpserver extension
+* a DuckDB from Python, running httpserver extension
+* a DuckDB from the Web, querying all 3 DuckDB at the same time
+
+<br>
+
+<hr>
 
 <br>
 
