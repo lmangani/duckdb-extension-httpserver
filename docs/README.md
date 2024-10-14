@@ -10,10 +10,10 @@ The extension goal is to replace the functionality currently offered by [Quackpi
 - `httpserve_stop()`
 
 ### API Endpoints
-- `/` <img src="https://img.shields.io/badge/GET-GREEN"> + <img src="https://img.shields.io/badge/POST-GREEN"/>
+- `/` `GET`, `POST`
   - `default_format`: Supports `JSONEachRow` or `JSONCompact`
-  - `query`: DuckDB SQL query
-- `/ping` <img src="https://img.shields.io/badge/GET-GREEN">
+  - `query`: Supports DuckDB SQL queries
+- `/ping` `GET`
 
 ### Usage
 Start the HTTP server providing the `host` and `port` parameters
@@ -88,6 +88,7 @@ D SELECT * FROM read_json_auto('http://localhost:9999/?q=SELECT version()');
 
 <br>
 
+<br>
 
 ### Build steps
 Now to build the extension, run:
