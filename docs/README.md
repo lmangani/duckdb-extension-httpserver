@@ -1,4 +1,7 @@
-<img src="https://github.com/user-attachments/assets/35bfded5-3f21-46b5-91f7-014f5a09fac3" width=200 />
+<!-- <img src="https://github.com/user-attachments/assets/35bfded5-3f21-46b5-91f7-014f5a09fac3" width=200 /> -->
+
+<img src="https://github.com/user-attachments/assets/46a5c546-7e9b-42c7-87f4-bc8defe674e0" width=250 />
+
 
 # DuckDB HTTP Server Extension
 This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
