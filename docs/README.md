@@ -20,7 +20,7 @@ The extension goal is to replace the functionality currently offered by [quackpi
 ![image](https://github.com/user-attachments/assets/e930a8d2-b3e4-454e-ba12-e5e91b30bfbe)
 
 #### Extension Functions
-- `httpserve_start(host, port)`: starts the server using provided parameters
+- `httpserve_start(host, port, auth)`: starts the server using provided parameters
 - `httpserve_stop()`: stops the server thread
 
 <br>
