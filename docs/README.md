@@ -62,7 +62,7 @@ SELECT httpserve_start('localhost', 9999, 'supersecretkey');
 └───────────────────────────────────────────────┘
 ```
 ```
-curl -X POST --header "X-API-Key: supersecretkey" -d "SELECT 'hello', version()" "http://localhost:9999/"
+curl -X POST --header "X-API-Key: secretkey" -d "SELECT 'hello', version()" "http://localhost:9999/"
 ```
 
 
