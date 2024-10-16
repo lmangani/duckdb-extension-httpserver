@@ -383,16 +383,25 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     });
 
     string host_str = host.GetString();
-    
+
     const char* run_in_same_thread_env = std::getenv("DUCKDB_HTTPSERVER_FOREGROUND");
     bool run_in_same_thread = (run_in_same_thread_env != nullptr && std::string(run_in_same_thread_env) == "1");
 
     if (run_in_same_thread) {
+        signal(SIGINT, [](int) {
+            if (global_state.server) {
+                global_state.server->stop();
+            }
+        });
+
         // Run the server in the same thread
         if (!global_state.server->listen(host_str.c_str(), port)) {
             global_state.is_running = false;
             throw IOException("Failed to start HTTP server on " + host_str + ":" + std::to_string(port));
         }
+
+        // The server has stopped (due to CTRL-C or other reasons)
+        global_state.is_running = false;
     } else {
         // Run the server in a dedicated thread (default)
         global_state.server_thread = make_uniq<std::thread>([host_str, port]() {
