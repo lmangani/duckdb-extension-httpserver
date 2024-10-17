@@ -33,7 +33,8 @@ LOAD httpserver;
 
 ### 🔌 Usage
 Start the HTTP server providing the `host`, `port` and `auth` parameters.<br>
-> If you want no authhentication, just pass an empty string.
+> * If you want no authhentication, just pass an empty string as parameter.<br>
+> * If you want the API run in foreground set `DUCKDB_HTTPSERVER_FOREGROUND=1`
 
 #### Basic Auth
 ```sql
