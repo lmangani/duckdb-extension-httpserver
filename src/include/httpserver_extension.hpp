@@ -17,4 +17,6 @@ struct HttpServerState;
 void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port);
 void HttpServerStop();
 
+	TableFunction DuckFlockTableFunction();
+
 } // namespace duckdb
