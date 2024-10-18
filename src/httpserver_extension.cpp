@@ -388,18 +388,40 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     bool run_in_same_thread = (run_in_same_thread_env != nullptr && std::string(run_in_same_thread_env) == "1");
 
     if (run_in_same_thread) {
+#ifdef _WIN32
+        // Windows-specific handler for Ctrl+C
+        BOOL WINAPI consoleHandler(DWORD signal) {
+            if (signal == CTRL_C_EVENT) {
+                if (global_state.server) {
+                    global_state.server->stop();
+                }
+                global_state.is_running = false; // Update the running state
+                return TRUE; // Indicate that the signal was handled
+            }
+            return FALSE;
+        }
+    
+        // Set the console control handler for Windows
+        if (!SetConsoleCtrlHandler(consoleHandler, TRUE)) {
+            std::cerr << "Error setting up signal handler" << std::endl;
+            throw IOException("Failed to set up signal handler");
+        }
+#else
+        // POSIX signal handler for SIGINT (Linux/macOS)
         signal(SIGINT, [](int) {
             if (global_state.server) {
                 global_state.server->stop();
             }
+            global_state.is_running = false; // Update the running state
         });
-
+#endif
+    
         // Run the server in the same thread
         if (!global_state.server->listen(host_str.c_str(), port)) {
             global_state.is_running = false;
             throw IOException("Failed to start HTTP server on " + host_str + ":" + std::to_string(port));
         }
-
+    
         // The server has stopped (due to CTRL-C or other reasons)
         global_state.is_running = false;
     } else {
