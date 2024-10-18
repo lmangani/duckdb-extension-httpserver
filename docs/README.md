@@ -68,7 +68,7 @@ Query your endpoint using the `X-API-Key` token:
 curl -X POST --header "X-API-Key: secretkey" -d "SELECT 'hello', version()" "http://localhost:9999/"
 ```
 
-You can perform the same action from DuckDB using HTTP SECRE headers:
+You can perform the same action from DuckDB using HTTP `extra_http_headers`:
 
 ```sql
 D CREATE SECRET extra_http_headers (
