@@ -61,9 +61,32 @@ SELECT httpserve_start('localhost', 9999, 'supersecretkey');
 │ HTTP server started on 0.0.0.0:9999           │
 └───────────────────────────────────────────────┘
 ```
-```
+
+Query your endpoint using the `X-API-Key` token:
+
+```bash
 curl -X POST --header "X-API-Key: secretkey" -d "SELECT 'hello', version()" "http://localhost:9999/"
 ```
+
+You can perform the same action from DuckDB using HTTP SECRE headers:
+
+```sql
+D CREATE SECRET extra_http_headers (
+      TYPE HTTP,
+      EXTRA_HTTP_HEADERS MAP{
+          'X-API-Key': 'secret'
+      }
+  );
+
+D SELECT * FROM duck_flock('SELECT version()', ['http://localhost:9999']);
+┌─────────────┐
+│ "version"() │
+│   varchar   │
+├─────────────┤
+│ v1.1.1      │
+└─────────────┘
+```
+
 
 
 #### 👉 QUERY UI
