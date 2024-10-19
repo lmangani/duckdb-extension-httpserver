@@ -383,12 +383,41 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     });
 
     string host_str = host.GetString();
-    global_state.server_thread = make_uniq<std::thread>([host_str, port]() {
+
+    const char* run_in_same_thread_env = std::getenv("DUCKDB_HTTPSERVER_FOREGROUND");
+    bool run_in_same_thread = (run_in_same_thread_env != nullptr && std::string(run_in_same_thread_env) == "1");
+
+    if (run_in_same_thread) {
+#ifdef _WIN32
+        throw IOException("Foreground mode not yet supported on WIN32 platforms.");
+#else
+        // POSIX signal handler for SIGINT (Linux/macOS)
+        signal(SIGINT, [](int) {
+            if (global_state.server) {
+                global_state.server->stop();
+            }
+            global_state.is_running = false; // Update the running state
+        });
+        
+        // Run the server in the same thread
         if (!global_state.server->listen(host_str.c_str(), port)) {
             global_state.is_running = false;
             throw IOException("Failed to start HTTP server on " + host_str + ":" + std::to_string(port));
         }
-    });
+#endif
+
+        // The server has stopped (due to CTRL-C or other reasons)
+        global_state.is_running = false;
+    } else {
+        // Run the server in a dedicated thread (default)
+        global_state.server_thread = make_uniq<std::thread>([host_str, port]() {
+            if (!global_state.server->listen(host_str.c_str(), port)) {
+                global_state.is_running = false;
+                throw IOException("Failed to start HTTP server on " + host_str + ":" + std::to_string(port));
+            }
+        });
+    }
+    
 }
 
 void HttpServerStop() {
