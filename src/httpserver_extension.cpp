@@ -23,9 +23,6 @@
 
 #ifdef __EMSCRIPTEN__
 #define WEBSOCKET_SUPPORT
-#endif
-
-#ifdef WEBSOCKET_SUPPORT
 #include <emscripten/websocket.h>
 #include <emscripten/val.h>
 #endif
@@ -362,6 +359,12 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
     }
 }
 
+#ifdef WEBSOCKET_SUPPORT
+EM_BOOL WebSocketOpen(int eventType, const EmscriptenWebSocketOpenEvent* websocketEvent, void* userData);
+EM_BOOL WebSocketClose(int eventType, const EmscriptenWebSocketCloseEvent* websocketEvent, void* userData);
+EM_BOOL WebSocketMessage(int eventType, const EmscriptenWebSocketMessageEvent* websocketEvent, void* userData);
+#endif
+
 void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t auth = string_t()) {
     if (global_state.is_running) {
         throw IOException("HTTP server is already running");
@@ -406,7 +409,8 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
 
     EmscriptenWebSocketCreateAttributes attrs;
     emscripten_websocket_init_create_attributes(&attrs);
-    attrs.url = ("ws://" + host_str + ":" + std::to_string(port)).c_str();
+    std::string ws_url = "ws://" + host_str + ":" + std::to_string(port);
+    attrs.url = ws_url.c_str();
 
     global_state.websocket_server = emscripten::val::global("WebSocket").new_(emscripten::val(attrs.url));
 #endif
@@ -445,6 +449,38 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
         });
     }
 }
+
+#ifdef WEBSOCKET_SUPPORT
+EM_BOOL WebSocketOpen(int eventType, const EmscriptenWebSocketOpenEvent* websocketEvent, void* userData) {
+    auto* state = static_cast<HttpServerState*>(userData);
+    state->websocket_connections[websocketEvent->socket] = emscripten::val::global("WebSocket").new_(websocketEvent->socket);
+    return EM_TRUE;
+}
+
+EM_BOOL WebSocketClose(int eventType, const EmscriptenWebSocketCloseEvent* websocketEvent, void* userData) {
+    auto* state = static_cast<HttpServerState*>(userData);
+    state->websocket_connections.erase(websocketEvent->socket);
+    return EM_TRUE;
+}
+
+EM_BOOL WebSocketMessage(int eventType, const EmscriptenWebSocketMessageEvent* websocketEvent, void* userData) {
+    auto* state = static_cast<HttpServerState*>(userData);
+    std::string message(reinterpret_cast<char*>(websocketEvent->data), websocketEvent->numBytes);
+    
+    // Process the message (e.g., run a query)
+    Connection con(*state->db_instance);
+    auto result = con.Query(message);
+    
+    // Convert result to JSON
+    ReqStats req_stats{0.0, 0, 0}; // You may want to update these stats
+    std::string json_output = ConvertResultToJSON(*result, req_stats);
+    
+    // Send the response back through the WebSocket
+    state->websocket_connections[websocketEvent->socket].call<void>("send", json_output);
+    
+    return EM_TRUE;
+}
+#endif
 
 void HttpServerStop() {
     if (global_state.is_running) {
