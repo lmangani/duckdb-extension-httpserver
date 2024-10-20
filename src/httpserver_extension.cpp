@@ -21,6 +21,15 @@
 #include <cstdlib>
 #include "play.h"
 
+#ifdef __EMSCRIPTEN__
+#define WEBSOCKET_SUPPORT
+#endif
+
+#ifdef WEBSOCKET_SUPPORT
+#include <emscripten/websocket.h>
+#include <emscripten/val.h>
+#endif
+
 using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
@@ -32,6 +41,11 @@ struct HttpServerState {
     DatabaseInstance* db_instance;
     unique_ptr<Allocator> allocator;
     std::string auth_token;
+
+#ifdef WEBSOCKET_SUPPORT
+    std::unordered_map<int, emscripten::val> websocket_connections;
+    emscripten::val websocket_server;
+#endif
 
     HttpServerState() : is_running(false), db_instance(nullptr) {}
 };
@@ -384,6 +398,19 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
 
     string host_str = host.GetString();
 
+#ifdef WEBSOCKET_SUPPORT
+    // WebSocket setup for WASM
+    emscripten_websocket_set_onopen_callback(nullptr, &global_state, WebSocketOpen);
+    emscripten_websocket_set_onclose_callback(nullptr, &global_state, WebSocketClose);
+    emscripten_websocket_set_onmessage_callback(nullptr, &global_state, WebSocketMessage);
+
+    EmscriptenWebSocketCreateAttributes attrs;
+    emscripten_websocket_init_create_attributes(&attrs);
+    attrs.url = ("ws://" + host_str + ":" + std::to_string(port)).c_str();
+
+    global_state.websocket_server = emscripten::val::global("WebSocket").new_(emscripten::val(attrs.url));
+#endif
+
     const char* run_in_same_thread_env = std::getenv("DUCKDB_HTTPSERVER_FOREGROUND");
     bool run_in_same_thread = (run_in_same_thread_env != nullptr && std::string(run_in_same_thread_env) == "1");
 
@@ -417,7 +444,6 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
             }
         });
     }
-    
 }
 
 void HttpServerStop() {
@@ -430,6 +456,15 @@ void HttpServerStop() {
         global_state.server_thread.reset();
         global_state.db_instance = nullptr;
         global_state.is_running = false;
+
+#ifdef WEBSOCKET_SUPPORT
+        // Clean up WebSocket connections
+        for (auto& conn : global_state.websocket_connections) {
+            conn.second.call<void>("close");
+        }
+        global_state.websocket_connections.clear();
+        global_state.websocket_server.call<void>("close");
+#endif
 
         // Reset the allocator
         global_state.allocator.reset();
@@ -473,6 +508,39 @@ static void LoadInternal(DatabaseInstance &instance) {
     // Register the cleanup function to be called at exit
     std::atexit(HttpServerCleanup);
 }
+
+// WASM ONLY
+#ifdef WEBSOCKET_SUPPORT
+EM_BOOL WebSocketOpen(int eventType, const EmscriptenWebSocketOpenEvent* websocketEvent, void* userData) {
+    auto* state = static_cast<HttpServerState*>(userData);
+    state->websocket_connections[websocketEvent->socket] = emscripten::val::global("WebSocket").new_(websocketEvent->socket);
+    return EM_TRUE;
+}
+
+EM_BOOL WebSocketClose(int eventType, const EmscriptenWebSocketCloseEvent* websocketEvent, void* userData) {
+    auto* state = static_cast<HttpServerState*>(userData);
+    state->websocket_connections.erase(websocketEvent->socket);
+    return EM_TRUE;
+}
+
+EM_BOOL WebSocketMessage(int eventType, const EmscriptenWebSocketMessageEvent* websocketEvent, void* userData) {
+    auto* state = static_cast<HttpServerState*>(userData);
+    std::string message(reinterpret_cast<char*>(websocketEvent->data), websocketEvent->numBytes);
+    
+    // Process the message (e.g., run a query)
+    Connection con(*state->db_instance);
+    auto result = con.Query(message);
+    
+    // Convert result to JSON
+    ReqStats req_stats{0.0, 0, 0}; // You may want to update these stats
+    std::string json_output = ConvertResultToJSON(*result, req_stats);
+    
+    // Send the response back through the WebSocket
+    state->websocket_connections[websocketEvent->socket].call<void>("send", json_output);
+    
+    return EM_TRUE;
+}
+#endif
 
 void HttpserverExtension::Load(DuckDB &db) {
     LoadInternal(*db.instance);
