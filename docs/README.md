@@ -23,6 +23,10 @@ The extension goal is to replace the functionality currently offered by [quackpi
 - `httpserve_start(host, port, auth)`: starts the server using provided parameters
 - `httpserve_stop()`: stops the server thread
 
+#### Notes
+
+🛑 Run DuckDB in `-readonly` mode for enhanced security
+
 <br>
 
 ### 📦 [Installation](https://community-extensions.duckdb.org/extensions/httpserver.html)
