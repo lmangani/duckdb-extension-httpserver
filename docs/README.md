@@ -4,7 +4,9 @@
 
 
 # DuckDB HTTP Server Extension
-This very experimental extension spawns an HTTP Server from within DuckDB serving query requests.<br>
+This extension transforms **DuckDB** instances into tiny multi-player **HTTP OLAP API** services.<br>
+Supports Authentication _(Basic Auth or X-Token)_ and includes the _play_ SQL user interface.
+
 The extension goal is to replace the functionality currently offered by [quackpipe](https://github.com/metrico/quackpipe)
 
 ### Features
