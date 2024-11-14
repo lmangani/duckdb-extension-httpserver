@@ -380,8 +380,6 @@ void HandleDiscoverySubscribe(const duckdb_httplib_openssl::Request& req, duckdb
         PeerDiscovery::Instance().registerPeer(hash, data);
         std::string peerId = PeerDiscovery::generateDeterministicId(data.name, data.endpoint);
         
-        std::cerr << "GOR PEERID for: " << peerId << std::endl;
-
         auto rdoc = yyjson_mut_doc_new(nullptr);
         auto rroot = yyjson_mut_obj(rdoc);
         yyjson_mut_doc_set_root(rdoc, rroot);
@@ -391,8 +389,6 @@ void HandleDiscoverySubscribe(const duckdb_httplib_openssl::Request& req, duckdb
         yyjson_mut_obj_add_int(rdoc, rroot, "ttl", data.ttl);
         
         char* json = yyjson_mut_write(rdoc, 0, nullptr);
-
-        std::cerr << "JSON OK for: " << peerId << std::endl;
 
         res.set_content(json, "application/json");
         free(json);
