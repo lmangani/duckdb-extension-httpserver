@@ -66,18 +66,17 @@ void PeerDiscovery::registerPeer(const std::string& hash, const PeerData& data) 
 std::unique_ptr<MaterializedQueryResult> PeerDiscovery::getPeers(const std::string& hash, bool ndjson) {
    Connection conn(db);
    auto stmt = conn.Prepare(
-       "SELECT name, endpoint, source_address as sourceAddress, "
-       "peer_id as peerId, metadata, "
-       "CAST(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - registered_at)) AS INTEGER) as age, "
-       "ttl FROM peers WHERE hash = $1 AND "
-       "EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - registered_at)) < ttl "
-       "ORDER BY age ASC");
+   "SELECT name, endpoint, source_address as sourceAddress, "
+   "peer_id as peerId, metadata, ttl, "
+   "strftime(registered_at, '%Y-%m-%d %H:%M:%S') as registered_at "
+   "FROM peers WHERE hash = $1");
    
    vector<Value> params;
    params.push_back(Value(hash));
-   
+   // FAIL
    auto result = stmt->Execute(params);
    return unique_ptr<MaterializedQueryResult>((MaterializedQueryResult*)result.release());
+
 }
 
 void PeerDiscovery::removePeer(const std::string& hash, const std::string& peerId) {
