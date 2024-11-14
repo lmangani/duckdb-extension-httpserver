@@ -13,6 +13,8 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
+#include "discovery.hpp"
+
 // Include yyjson for JSON handling
 #include "yyjson.hpp"
 
@@ -348,6 +350,123 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
     }
 }
 
+// Discovery Functions
+void HandleDiscoverySubscribe(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+
+    string path = req.path;
+    string hash = path.substr(path.find_last_of('/') + 1);
+
+    auto doc = yyjson_read(req.body.c_str(), req.body.length(), 0);
+    if (!doc) {
+        res.status = 400;
+        res.set_content("Invalid JSON", "text/plain");
+        return;
+    }
+
+    auto root = yyjson_doc_get_root(doc);
+    PeerData data;
+    auto name_val = yyjson_obj_get(root, "name");
+    auto endpoint_val = yyjson_obj_get(root, "endpoint");
+    auto ttl_val = yyjson_obj_get(root, "ttl");
+    auto metadata_val = yyjson_obj_get(root, "metadata");
+
+    data.name = name_val ? yyjson_get_str(name_val) : "";
+    data.endpoint = endpoint_val ? yyjson_get_str(endpoint_val) : "";
+    data.ttl = ttl_val ? yyjson_get_int(ttl_val) : 300;
+    data.metadata = metadata_val ? yyjson_get_str(metadata_val) : "{}";
+    data.sourceAddress = req.remote_addr;
+
+    try {
+        PeerDiscovery::Instance().registerPeer(hash, data);
+        std::string peerId = PeerDiscovery::generateDeterministicId(data.name, data.endpoint);
+        
+        std::cerr << "GOR PEERID for: " << peerId << std::endl;
+
+        auto rdoc = yyjson_mut_doc_new(nullptr);
+        auto rroot = yyjson_mut_obj(rdoc);
+        yyjson_mut_doc_set_root(rdoc, rroot);
+        
+        yyjson_mut_obj_add_str(rdoc, rroot, "peerId", peerId.c_str());
+        yyjson_mut_obj_add_str(rdoc, rroot, "message", "Successfully registered");
+        yyjson_mut_obj_add_int(rdoc, rroot, "ttl", data.ttl);
+        
+        char* json = yyjson_mut_write(rdoc, 0, nullptr);
+
+        std::cerr << "JSON OK for: " << peerId << std::endl;
+
+        res.set_content(json, "application/json");
+        free(json);
+        yyjson_mut_doc_free(rdoc);
+    } catch (const Exception& ex) {
+        res.status = 500;
+        res.set_content(ex.what(), "text/plain");
+    }
+    
+    yyjson_doc_free(doc);
+}
+
+void HandleDiscoveryGet(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+
+    string path = req.path;
+    string hash = path.substr(path.find_last_of('/') + 1);
+    bool ndjson = false;
+
+    if ((path.find_last_of('/') + 2)){
+	ndjson = true;
+    }
+
+    // const auto& hash = req.path_params.at("secretHash");
+    // bool ndjson = req.get_param_value("format") == "ndjson";
+    
+    try {
+        auto result = PeerDiscovery::Instance().getPeers(hash, ndjson);
+        if (!result || result->HasError()) {
+            res.status = 500;
+            res.set_content(result ? result->GetError() : "Query failed", "text/plain");
+            return;
+        }
+
+        auto materialized = unique_ptr<MaterializedQueryResult>(reinterpret_cast<MaterializedQueryResult*>(result.release()));
+        
+        if (ndjson) {
+            res.set_content(ConvertResultToNDJSON(*materialized), "application/x-ndjson");
+        } else {
+            ReqStats stats{0.0, 0, (int64_t)materialized->RowCount()};
+            res.set_content(ConvertResultToJSON(*materialized, stats), "application/json");
+        }
+    } catch (const Exception& ex) {
+        res.status = 500;
+        res.set_content(ex.what(), "text/plain");
+    }
+}
+
+void HandleHeartbeat(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+    const auto& hash = req.path_params.at("secretHash");
+    const auto& peerId = req.path_params.at("peerId");
+    
+    try {
+        PeerDiscovery::Instance().updateHeartbeat(hash, peerId);
+        res.set_content("{\"message\":\"Heartbeat received\"}", "application/json");
+    } catch (const Exception& ex) {
+        res.status = 404;
+        res.set_content("{\"error\":\"Peer not found\"}", "application/json");
+    }
+}
+
+void HandleUnsubscribe(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+    const auto& hash = req.path_params.at("secretHash");
+    const auto& peerId = req.path_params.at("peerId");
+    
+    try {
+        PeerDiscovery::Instance().removePeer(hash, peerId);
+        res.set_content("{\"message\":\"Successfully unsubscribed\"}", "application/json");
+    } catch (const Exception& ex) {
+        res.status = 500;
+        res.set_content(ex.what(), "text/plain");
+    }
+}
+
+// Server Start
 void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t auth = string_t()) {
     if (global_state.is_running) {
         throw IOException("HTTP server is already running");
@@ -377,10 +496,30 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     global_state.server->Get("/", HandleHttpRequest);
     global_state.server->Post("/", HandleHttpRequest);
 
+    // Handle Discovery API
+    global_state.server->Post("/subscribe/[^/]+", [&](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+        HandleDiscoverySubscribe(req, res);
+    });
+
+    global_state.server->Get("/discovery/[^/]+", [&](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+        HandleDiscoveryGet(req, res);
+    });
+
+    global_state.server->Post("/heartbeat/[^/]+/[^/]+", [&](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+        HandleHeartbeat(req, res);
+    });
+
+    global_state.server->Delete("/unsubscribe/[^/]+/[^/]+", [&](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+        HandleUnsubscribe(req, res);
+    });
+
     // Health check endpoint
     global_state.server->Get("/ping", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
         res.set_content("OK", "text/plain");
     });
+
+    // Initialize PeerDiscovery with the database instance
+    PeerDiscovery::Initialize(db);
 
     string host_str = host.GetString();
 

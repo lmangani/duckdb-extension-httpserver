@@ -8,7 +8,7 @@ set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 project(${TARGET_NAME})
 include_directories(src/include duckdb/third_party/httplib duckdb/parquet/include)
 
-set(EXTENSION_SOURCES src/httpserver_extension.cpp)
+set(EXTENSION_SOURCES src/httpserver_extension.cpp src/discovery.cpp)
 
 if(MINGW)
   set(OPENSSL_USE_STATIC_LIBS TRUE)
