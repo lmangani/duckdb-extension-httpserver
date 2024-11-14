@@ -64,19 +64,26 @@ void PeerDiscovery::registerPeer(const std::string& hash, const PeerData& data) 
 }
 
 std::unique_ptr<MaterializedQueryResult> PeerDiscovery::getPeers(const std::string& hash, bool ndjson) {
-   Connection conn(db);
-   auto stmt = conn.Prepare(
-   "SELECT name, endpoint, source_address as sourceAddress, "
-   "peer_id as peerId, metadata, ttl, "
-   "strftime(registered_at, '%Y-%m-%d %H:%M:%S') as registered_at "
-   "FROM peers WHERE hash = $1");
-   
-   vector<Value> params;
-   params.push_back(Value(hash));
-   // FAIL
-   auto result = stmt->Execute(params);
-   return unique_ptr<MaterializedQueryResult>((MaterializedQueryResult*)result.release());
+    Connection conn(db);
 
+    // Prepare the statement
+    auto stmt = conn.Prepare(
+       "SELECT name, endpoint, source_address AS sourceAddress, "
+       "peer_id AS peerId, metadata, ttl, "
+       "strftime(registered_at, '%Y-%m-%d %H:%M:%S') AS registered_at "
+       "FROM peers WHERE hash = $1");
+
+    // Execute the statement with the parameter
+    vector<Value> params = {Value(hash)};
+    auto result = stmt->Execute(params);
+
+    auto materialized_result = dynamic_cast<MaterializedQueryResult*>(result.get());
+    if (!materialized_result) {
+        throw std::runtime_error("Failed to retrieve materialized result.");
+    }
+
+    return std::unique_ptr<MaterializedQueryResult>(
+        static_cast<MaterializedQueryResult*>(result.release()));
 }
 
 void PeerDiscovery::removePeer(const std::string& hash, const std::string& peerId) {

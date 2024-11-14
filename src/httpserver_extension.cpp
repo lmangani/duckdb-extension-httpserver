@@ -401,40 +401,34 @@ void HandleDiscoverySubscribe(const duckdb_httplib_openssl::Request& req, duckdb
     yyjson_doc_free(doc);
 }
 
+
 void HandleDiscoveryGet(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
+    std::string path = req.path;
+    std::string hash = path.substr(path.find_last_of('/') + 1);
+    bool ndjson = path.find_last_of('/') + 2;
 
-    string path = req.path;
-    string hash = path.substr(path.find_last_of('/') + 1);
-    bool ndjson = false;
-
-    if ((path.find_last_of('/') + 2)){
-	ndjson = true;
-    }
-
-    // const auto& hash = req.path_params.at("secretHash");
-    // bool ndjson = req.get_param_value("format") == "ndjson";
-    
     try {
         auto result = PeerDiscovery::Instance().getPeers(hash, ndjson);
+
+        // Check if the result has an error using HasError() and GetError()
         if (!result || result->HasError()) {
             res.status = 500;
             res.set_content(result ? result->GetError() : "Query failed", "text/plain");
             return;
         }
 
-        auto materialized = unique_ptr<MaterializedQueryResult>(reinterpret_cast<MaterializedQueryResult*>(result.release()));
-        
         if (ndjson) {
-            res.set_content(ConvertResultToNDJSON(*materialized), "application/x-ndjson");
+            res.set_content(ConvertResultToNDJSON(*result), "application/x-ndjson");
         } else {
-            ReqStats stats{0.0, 0, (int64_t)materialized->RowCount()};
-            res.set_content(ConvertResultToJSON(*materialized, stats), "application/json");
+            ReqStats stats{0.0, 0, static_cast<int64_t>(result->RowCount())};
+            res.set_content(ConvertResultToJSON(*result, stats), "application/json");
         }
-    } catch (const Exception& ex) {
+    } catch (const std::exception& ex) {
         res.status = 500;
         res.set_content(ex.what(), "text/plain");
     }
 }
+
 
 void HandleHeartbeat(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
     const auto& hash = req.path_params.at("secretHash");
