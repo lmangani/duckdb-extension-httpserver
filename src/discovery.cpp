@@ -75,15 +75,10 @@ std::unique_ptr<MaterializedQueryResult> PeerDiscovery::getPeers(const std::stri
 
     // Execute the statement with the parameter
     vector<Value> params = {Value(hash)};
-    auto result = stmt->Execute(params);
+    auto raw_result = stmt->Execute(params);
+    auto result = raw_result->Cast<StreamQueryResult>().Materialize();
 
-    auto materialized_result = dynamic_cast<MaterializedQueryResult*>(result.get());
-    if (!materialized_result) {
-        throw std::runtime_error("Failed to retrieve materialized result.");
-    }
-
-    return std::unique_ptr<MaterializedQueryResult>(
-        static_cast<MaterializedQueryResult*>(result.release()));
+    return std::move(result);
 }
 
 void PeerDiscovery::removePeer(const std::string& hash, const std::string& peerId) {
