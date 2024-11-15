@@ -323,7 +323,6 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
             return;
         }
 
-
         ReqStats stats{
             static_cast<float>(elapsed.count()) / 1000,
             0,
@@ -373,7 +372,7 @@ void HandleDiscoverySubscribe(const duckdb_httplib_openssl::Request& req, duckdb
     data.name = name_val ? yyjson_get_str(name_val) : "";
     data.endpoint = endpoint_val ? yyjson_get_str(endpoint_val) : "";
     data.ttl = ttl_val ? yyjson_get_int(ttl_val) : 300;
-    data.metadata = metadata_val ? yyjson_get_str(metadata_val) : "{}";
+    data.metadata = metadata_val ? yyjson_get_str(metadata_val) : "false";
     data.sourceAddress = req.remote_addr;
 
     try {
@@ -397,18 +396,35 @@ void HandleDiscoverySubscribe(const duckdb_httplib_openssl::Request& req, duckdb
         res.status = 500;
         res.set_content(ex.what(), "text/plain");
     }
-    
+
     yyjson_doc_free(doc);
+
+    // cleanup expired
+    // PeerDiscovery::Instance().cleanupExpired();
 }
 
 
 void HandleDiscoveryGet(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
     std::string path = req.path;
     std::string hash = path.substr(path.find_last_of('/') + 1);
-    bool ndjson = path.find_last_of('/') + 2;
+
+    // Set default format to JSONCompact
+    std::string format = "JSONEachRow";
+
+    // Check for format in URL parameter or header
+    if (req.has_param("default_format")) {
+        format = req.get_param_value("default_format");
+    } else if (req.has_header("X-ClickHouse-Format")) {
+        format = req.get_header_value("X-ClickHouse-Format");
+    } else if (req.has_header("format")) {
+        format = req.get_header_value("format");
+    }
 
     try {
-        auto result = PeerDiscovery::Instance().getPeers(hash, ndjson);
+        auto start = std::chrono::system_clock::now();
+        auto result = PeerDiscovery::Instance().getPeers(hash, false);
+        auto end = std::chrono::system_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         // Check if the result has an error using HasError() and GetError()
         if (!result || result->HasError()) {
@@ -417,12 +433,25 @@ void HandleDiscoveryGet(const duckdb_httplib_openssl::Request& req, duckdb_httpl
             return;
         }
 
-        if (ndjson) {
-            res.set_content(ConvertResultToNDJSON(*result), "application/x-ndjson");
+        ReqStats stats{
+            static_cast<float>(elapsed.count()) / 1000,
+            0,
+            0
+        };
+
+        // Format Options
+        if (format == "JSONEachRow") {
+            std::string json_output = ConvertResultToNDJSON(*result);
+            res.set_content(json_output, "application/x-ndjson");
+        } else if (format == "JSONCompact") {
+            std::string json_output = ConvertResultToJSON(*result, stats);
+            res.set_content(json_output, "application/json");
         } else {
-            ReqStats stats{0.0, 0, static_cast<int64_t>(result->RowCount())};
-            res.set_content(ConvertResultToJSON(*result, stats), "application/json");
+            // Default to NDJSON for DuckDB's own queries
+            std::string json_output = ConvertResultToNDJSON(*result);
+            res.set_content(json_output, "application/x-ndjson");
         }
+
     } catch (const std::exception& ex) {
         res.status = 500;
         res.set_content(ex.what(), "text/plain");

@@ -25,7 +25,7 @@ void PeerDiscovery::initTables() {
                "source_address VARCHAR, ttl BIGINT, metadata VARCHAR,"
                "registered_at TIMESTAMP, PRIMARY KEY (hash, peer_id))");
     
-    conn.Query("CREATE INDEX IF NOT EXISTS idx_peers_ttl ON peers(registered_at, ttl)");
+    // conn.Query("CREATE INDEX IF NOT EXISTS idx_peers_ttl ON peers(registered_at, ttl)");
 }
 
 std::string PeerDiscovery::generateDeterministicId(const std::string& name, const std::string& endpoint) {
@@ -48,7 +48,7 @@ void PeerDiscovery::registerPeer(const std::string& hash, const PeerData& data) 
    std::string peerId = generateDeterministicId(data.name, data.endpoint);
    
    auto stmt = conn.Prepare(
-       "INSERT INTO peers (hash, peer_id, name, endpoint, source_address, ttl, metadata, registered_at) "
+       "INSERT OR REPLACE INTO peers (hash, peer_id, name, endpoint, source_address, ttl, metadata, registered_at) "
        "VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)");
    
    vector<Value> params;
@@ -57,7 +57,7 @@ void PeerDiscovery::registerPeer(const std::string& hash, const PeerData& data) 
    params.push_back(Value(data.name));
    params.push_back(Value(data.endpoint));
    params.push_back(Value(data.sourceAddress));
-   params.push_back(Value::BIGINT(data.ttl));
+   params.push_back(Value::BIGINT(data.ttl)); /* needs stoi(data.ttl) for dumb clients? */
    params.push_back(Value(data.metadata));
    
    stmt->Execute(params);
@@ -68,10 +68,10 @@ std::unique_ptr<MaterializedQueryResult> PeerDiscovery::getPeers(const std::stri
 
     // Prepare the statement
     auto stmt = conn.Prepare(
-       "SELECT name, endpoint, source_address AS sourceAddress, "
-       "peer_id AS peerId, metadata, ttl, "
+       "SELECT name, endpoint, source_address, "
+       "peer_id, metadata, ttl, "
        "strftime(registered_at, '%Y-%m-%d %H:%M:%S') AS registered_at "
-       "FROM peers WHERE hash = $1");
+       "FROM peers WHERE hash = $1 AND EXTRACT(EPOCH FROM age(now()::TIMESTAMP, registered_at)) <= ttl");
 
     // Execute the statement with the parameter
     vector<Value> params = {Value(hash)};
@@ -96,8 +96,7 @@ void PeerDiscovery::updateHeartbeat(const std::string& hash, const std::string& 
 
 void PeerDiscovery::cleanupExpired() {
     Connection conn(db);
-    conn.Query("DELETE FROM peers WHERE EXTRACT(EPOCH FROM "
-               "(CURRENT_TIMESTAMP - registered_at)) >= ttl");
+    conn.Query("DELETE FROM peers WHERE EXTRACT(EPOCH FROM age(now()::TIMESTAMP, registered_at)) <= ttl");
 }
 
 } // namespace duckdb
