@@ -77,6 +77,8 @@ static HttpServerState global_state;
         int64_t read_rows;
     };
 
+
+
 // Convert the query result to JSON format
 static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats &req_stats) {
     auto doc = yyjson_mut_doc_new(nullptr);
@@ -469,7 +471,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 
     ExtensionUtil::RegisterFunction(instance, httpserve_start);
     ExtensionUtil::RegisterFunction(instance, httpserve_stop);
-
+    ExtensionUtil::RegisterFunction(instance, DuckFlockTableFunction());
     // Register the cleanup function to be called at exit
     std::atexit(HttpServerCleanup);
 }
