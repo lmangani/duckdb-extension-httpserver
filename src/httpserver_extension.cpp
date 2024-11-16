@@ -57,8 +57,8 @@ static void SetConfigValue(DataChunk &args, ExpressionState &state, Vector &resu
         });
 }
 
-static void SetEnvValue(DataChunk &args, ExpressionState &state, Vector &result, 
-                          const string &var_name, const string &value_type) {
+static void SetEnvValue(DataChunk &args, ExpressionState &state, Vector &result,
+                       const string &var_name, const string &value_type) {
     UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(),
         [&](string_t value) {
             try {
@@ -66,12 +66,12 @@ static void SetEnvValue(DataChunk &args, ExpressionState &state, Vector &result,
                     throw std::invalid_argument(value_type + " cannot be empty.");
                 }
 #ifdef _WIN32
-   		 _putenv_s(name.GetString().c_str(), value.GetString().c_str());
+                _putenv_s(var_name.c_str(), value.GetString().c_str());
 #else
-    		setenv(var_name.c_str(), value.GetString().c_str(), true);
+                setenv(var_name.c_str(), value.GetString().c_str(), true);
 #endif
-		auto new_value =  std::getenv("DUCKDB_HTTPSERVER_DISCOVERY");
-                return StringVector::AddString(result, value_type + " set ENV " + var_name +  " to: " + new_value ) ; //value.GetString()
+                auto new_value = std::getenv("DUCKDB_HTTPSERVER_DISCOVERY");
+                return StringVector::AddString(result, value_type + " set ENV " + var_name + " to: " + new_value);
             } catch (std::exception &e) {
                 return StringVector::AddString(result, "Failed to set ENV " + var_name + " to " + value_type + ": " + e.what());
             }
