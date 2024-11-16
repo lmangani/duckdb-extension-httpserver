@@ -66,7 +66,7 @@ static void SetEnvValue(DataChunk &args, ExpressionState &state, Vector &result,
                     throw std::invalid_argument(value_type + " cannot be empty.");
                 }
 #ifdef _WIN32
-   		 _putenv_s(name.c_str(), value.c_str());
+   		 _putenv_s(name.c_str(), value.GetString().c_str());
 #else
     		setenv(var_name.c_str(), value.GetString().c_str(), true);
 #endif
