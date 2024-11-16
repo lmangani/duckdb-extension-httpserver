@@ -59,7 +59,7 @@ namespace duckdb {
 
     TableFunction DuckFlockTableFunction() {
       TableFunction f(
-          "duck_flock",
+          "url_flock",
           {LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)},
           DuckFlockImplementation,
           DuckFlockBind,
