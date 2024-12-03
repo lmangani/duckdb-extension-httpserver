@@ -12,7 +12,10 @@
 #include <thread>
 #include <memory>
 #include <cstdlib>
+
+#ifndef _WIN32
 #include <syslog.h>
+#endif
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -383,34 +386,41 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
 
     string host_str = host.GetString();
 
+
 #ifndef _WIN32
-    // Debug and Syslog Events
-    const char* use_syslog = std::getenv("DUCKDB_HTTPSERVER_SYSLOG");
     const char* debug_env = std::getenv("DUCKDB_HTTPSERVER_DEBUG");
-    if (use_syslog != nullptr && std::string(use_syslog) == "1") {
-        openlog("duckdb-httpserver", LOG_PID | LOG_NDELAY, LOG_LOCAL0);
+    const char* use_syslog = std::getenv("DUCKDB_HTTPSERVER_SYSLOG");
+    
+    if (debug_env != nullptr && std::string(debug_env) == "1") {
         global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
-            syslog(LOG_INFO, "%s %s - %d", 
+            time_t now_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            char timestr[32];
+            strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", localtime(&now_time));
+            // Use \r\n for consistent line endings
+            fprintf(stdout, "[%s] %s %s - %d - from %s:%d\r\n", 
+                timestr,
                 req.method.c_str(),
                 req.path.c_str(), 
-                res.status);
+                res.status,
+                req.remote_addr.c_str(),
+                req.remote_port);
+            fflush(stdout);
+        });
+    } else if (use_syslog != nullptr && std::string(use_syslog) == "1") {
+        openlog("duckdb-httpserver", LOG_PID | LOG_NDELAY, LOG_LOCAL0);
+        global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
+            syslog(LOG_INFO, "%s %s - %d - from %s:%d", 
+                req.method.c_str(),
+                req.path.c_str(), 
+                res.status,
+                req.remote_addr.c_str(),
+                req.remote_port);
         });
         std::atexit([]() {
             closelog();
         });
-    } else if (debug_env != nullptr && std::string(debug_env) == "1") {
-        global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
-            auto now = std::chrono::system_clock::now();
-            auto now_time = std::chrono::system_clock::to_time_t(now);
-            fprintf(stdout, "[%s] %s %s - %d\n", 
-                std::ctime(&now_time), 
-                req.method.c_str(),
-                req.path.c_str(), 
-                res.status);
-            fflush(stdout);
-        });
-    } 
-#endif    
+    }
+#endif
 
     const char* run_in_same_thread_env = std::getenv("DUCKDB_HTTPSERVER_FOREGROUND");
     bool run_in_same_thread = (run_in_same_thread_env != nullptr && std::string(run_in_same_thread_env) == "1");
