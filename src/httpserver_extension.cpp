@@ -9,16 +9,15 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/allocator.hpp"
 #include <chrono>
-
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.hpp"
-
-// Include yyjson for JSON handling
-#include "yyjson.hpp"
-
 #include <thread>
 #include <memory>
 #include <cstdlib>
+#include <syslog.h>
+
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include "httplib.hpp"
+#include "yyjson.hpp"
+
 #include "play.h"
 
 using namespace duckdb_yyjson; // NOLINT
