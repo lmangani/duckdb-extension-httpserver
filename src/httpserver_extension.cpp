@@ -385,6 +385,8 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     string host_str = host.GetString();
 
     const char* debug_env = std::getenv("DUCKDB_HTTPSERVER_DEBUG");
+    const char* use_syslog = std::getenv("DUCKDB_HTTPSERVER_SYSLOG");
+    
     if (debug_env != nullptr && std::string(debug_env) == "1") {
         global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
             auto now = std::chrono::system_clock::now();
@@ -395,6 +397,17 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
                 req.path.c_str(), 
                 res.status);
             fflush(stdout);
+        });
+    } else if (use_syslog != nullptr && std::string(use_syslog) == "1") {
+        openlog("duckdb-httpserver", LOG_PID | LOG_NDELAY, LOG_LOCAL0);
+        global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
+            syslog(LOG_INFO, "%s %s - %d", 
+                req.method.c_str(),
+                req.path.c_str(), 
+                res.status);
+        });
+        std::atexit([]() {
+            closelog();
         });
     }
 
