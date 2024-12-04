@@ -41,6 +41,7 @@ LOAD httpserver;
 Start the HTTP server providing the `host`, `port` and `auth` parameters.<br>
 > * If you want no authentication, just pass an empty string as parameter.<br>
 > * If you want the API run in foreground set `DUCKDB_HTTPSERVER_FOREGROUND=1`
+> * If you want logs set `DUCKDB_HTTPSERVER_DEBUG` or `DUCKDB_HTTPSERVER_SYSLOG`
 
 #### Basic Auth
 ```sql
@@ -90,7 +91,7 @@ D SELECT * FROM duck_flock('SELECT version()', ['http://localhost:9999']);
 │ "version"() │
 │   varchar   │
 ├─────────────┤
-│ v1.1.1      │
+│ v1.1.3      │
 └─────────────┘
 ```
 
@@ -122,7 +123,7 @@ curl -X POST -d "SELECT 'hello', version()" "http://localhost:9999/?default_form
   "data": [
     [
       "hello",
-      "v1.1.1"
+      "v1.1.3"
     ]
   ],
   "rows": 1,
@@ -153,7 +154,7 @@ D SELECT * FROM read_json_auto('http://localhost:9999/?q=SELECT version()');
 │ "version"() │
 │   varchar   │
 ├─────────────┤
-│ v1.1.1      │
+│ v1.1.3      │
 └─────────────┘
 ```
 
