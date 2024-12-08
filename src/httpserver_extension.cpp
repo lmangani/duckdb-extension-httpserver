@@ -9,18 +9,19 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/allocator.hpp"
 #include <chrono>
-
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.hpp"
-
-#include "discovery.hpp"
-
-// Include yyjson for JSON handling
-#include "yyjson.hpp"
-
 #include <thread>
 #include <memory>
 #include <cstdlib>
+
+#ifndef _WIN32
+#include <syslog.h>
+#endif
+
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include "httplib.hpp"
+#include "yyjson.hpp"
+
+#include "discovery.hpp"
 #include "play.h"
 
 using namespace duckdb_yyjson; // NOLINT
@@ -609,6 +610,42 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     PeerDiscovery::Initialize(db);
 
     string host_str = host.GetString();
+
+
+#ifndef _WIN32
+    const char* debug_env = std::getenv("DUCKDB_HTTPSERVER_DEBUG");
+    const char* use_syslog = std::getenv("DUCKDB_HTTPSERVER_SYSLOG");
+    
+    if (debug_env != nullptr && std::string(debug_env) == "1") {
+        global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
+            time_t now_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            char timestr[32];
+            strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", localtime(&now_time));
+            // Use \r\n for consistent line endings
+            fprintf(stdout, "[%s] %s %s - %d - from %s:%d\r\n", 
+                timestr,
+                req.method.c_str(),
+                req.path.c_str(), 
+                res.status,
+                req.remote_addr.c_str(),
+                req.remote_port);
+            fflush(stdout);
+        });
+    } else if (use_syslog != nullptr && std::string(use_syslog) == "1") {
+        openlog("duckdb-httpserver", LOG_PID | LOG_NDELAY, LOG_LOCAL0);
+        global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
+            syslog(LOG_INFO, "%s %s - %d - from %s:%d", 
+                req.method.c_str(),
+                req.path.c_str(), 
+                res.status,
+                req.remote_addr.c_str(),
+                req.remote_port);
+        });
+        std::atexit([]() {
+            closelog();
+        });
+    }
+#endif
 
     const char* run_in_same_thread_env = std::getenv("DUCKDB_HTTPSERVER_FOREGROUND");
     bool run_in_same_thread = (run_in_same_thread_env != nullptr && ( std::string(run_in_same_thread_env) == "1" || std::string(run_in_same_thread_env) == "true" ));
