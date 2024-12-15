@@ -40,44 +40,44 @@ struct HttpServerState {
 
 static HttpServerState global_state;
 
-    std::string GetColumnType(MaterializedQueryResult &result, idx_t column) {
-        if (result.RowCount() == 0) {
-            return "String";
-        }
-        switch (result.types[column].id()) {
-            case LogicalTypeId::FLOAT:
-                return "Float";
-            case LogicalTypeId::DOUBLE:
-                return "Double";
-            case LogicalTypeId::INTEGER:
-                return "Int32";
-            case LogicalTypeId::BIGINT:
-                return "Int64";
-            case LogicalTypeId::UINTEGER:
-                return "UInt32";
-            case LogicalTypeId::UBIGINT:
-                return "UInt64";
-            case LogicalTypeId::VARCHAR:
-                return "String";
-            case LogicalTypeId::TIME:
-                return "DateTime";
-            case LogicalTypeId::DATE:
-                return "Date";
-            case LogicalTypeId::TIMESTAMP:
-                return "DateTime";
-            case LogicalTypeId::BOOLEAN:
-                return "Int8";
-            default:
-                return "String";
-        }
-        return "String";
-    }
+std::string GetColumnType(MaterializedQueryResult &result, idx_t column) {
+	if (result.RowCount() == 0) {
+		return "String";
+	}
+	switch (result.types[column].id()) {
+		case LogicalTypeId::FLOAT:
+			return "Float";
+		case LogicalTypeId::DOUBLE:
+			return "Double";
+		case LogicalTypeId::INTEGER:
+			return "Int32";
+		case LogicalTypeId::BIGINT:
+			return "Int64";
+		case LogicalTypeId::UINTEGER:
+			return "UInt32";
+		case LogicalTypeId::UBIGINT:
+			return "UInt64";
+		case LogicalTypeId::VARCHAR:
+			return "String";
+		case LogicalTypeId::TIME:
+			return "DateTime";
+		case LogicalTypeId::DATE:
+			return "Date";
+		case LogicalTypeId::TIMESTAMP:
+			return "DateTime";
+		case LogicalTypeId::BOOLEAN:
+			return "Int8";
+		default:
+			return "String";
+	}
+	return "String";
+}
 
-    struct ReqStats {
-        float elapsed_sec;
-        int64_t read_bytes;
-        int64_t read_rows;
-    };
+struct ReqStats {
+	float elapsed_sec;
+	int64_t read_bytes;
+	int64_t read_rows;
+};
 
 // Convert the query result to JSON format
 static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats &req_stats) {
@@ -176,7 +176,6 @@ bool IsAuthenticated(const duckdb_httplib_openssl::Request& req) {
     return false;
 }
 
-
 // Convert the query result to NDJSON (JSONEachRow) format
 static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
     std::string ndjson_output;
@@ -217,40 +216,6 @@ static std::string ConvertResultToNDJSON(MaterializedQueryResult &result) {
 
     return ndjson_output;
 }
-
-static void HandleQuery(const string& query, duckdb_httplib_openssl::Response& res) {
-    try {
-        if (!global_state.db_instance) {
-            throw IOException("Database instance not initialized");
-        }
-
-        Connection con(*global_state.db_instance);
-        const auto& start = std::chrono::system_clock::now();
-        auto result = con.Query(query);
-        const auto end = std::chrono::system_clock::now();
-
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        ReqStats req_stats{
-            static_cast<float>(elapsed.count()) / 1000,
-            0,
-            0
-        };
-
-        if (result->HasError()) {
-            res.status = 400;
-            res.set_content(result->GetError(), "text/plain");
-            return;
-        }
-
-        // Convert result to JSON
-        std::string json_output = ConvertResultToJSON(*result, req_stats);
-        res.set_content(json_output, "application/json");
-    } catch (const Exception& ex) {
-        res.status = 400;
-        res.set_content(ex.what(), "text/plain");
-    }
-}
-
 
 // Handle both GET and POST requests
 void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
@@ -342,7 +307,7 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
             std::string json_output = ConvertResultToNDJSON(*result);
             res.set_content(json_output, "application/x-ndjson");
         }
-        
+
     } catch (const Exception& ex) {
         res.status = 500;
         std::string error_message = "Code: 59, e.displayText() = DB::Exception: " + std::string(ex.what());
@@ -390,17 +355,17 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
 #ifndef _WIN32
     const char* debug_env = std::getenv("DUCKDB_HTTPSERVER_DEBUG");
     const char* use_syslog = std::getenv("DUCKDB_HTTPSERVER_SYSLOG");
-    
+
     if (debug_env != nullptr && std::string(debug_env) == "1") {
         global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
             time_t now_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             char timestr[32];
             strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", localtime(&now_time));
             // Use \r\n for consistent line endings
-            fprintf(stdout, "[%s] %s %s - %d - from %s:%d\r\n", 
+            fprintf(stdout, "[%s] %s %s - %d - from %s:%d\r\n",
                 timestr,
                 req.method.c_str(),
-                req.path.c_str(), 
+                req.path.c_str(),
                 res.status,
                 req.remote_addr.c_str(),
                 req.remote_port);
@@ -409,9 +374,9 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     } else if (use_syslog != nullptr && std::string(use_syslog) == "1") {
         openlog("duckdb-httpserver", LOG_PID | LOG_NDELAY, LOG_LOCAL0);
         global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
-            syslog(LOG_INFO, "%s %s - %d - from %s:%d", 
+            syslog(LOG_INFO, "%s %s - %d - from %s:%d",
                 req.method.c_str(),
-                req.path.c_str(), 
+                req.path.c_str(),
                 res.status,
                 req.remote_addr.c_str(),
                 req.remote_port);
@@ -436,7 +401,7 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
             }
             global_state.is_running = false; // Update the running state
         });
-        
+
         // Run the server in the same thread
         if (!global_state.server->listen(host_str.c_str(), port)) {
             global_state.is_running = false;
@@ -455,7 +420,6 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
             }
         });
     }
-    
 }
 
 void HttpServerStop() {
