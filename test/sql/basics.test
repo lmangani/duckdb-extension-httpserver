@@ -1,0 +1,69 @@
+# name: test/sql/basics.test
+# description: test httpserver extension
+# group: [httpserver]
+
+# Before we load the extension, this will fail
+statement error
+SELECT httpserve_start('127.0.0.1', 4000, '');
+----
+Catalog Error: Scalar Function with name httpserve_start does not exist!
+
+# Require statement will ensure this test is run with this extension loaded
+require httpserver
+
+statement ok
+INSTALL http_client FROM community;
+
+statement ok
+LOAD http_client;
+
+statement ok
+INSTALL json;
+
+statement ok
+LOAD json;
+
+# The HTTP server is not available yet
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/abc', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+-1	HTTP GET request failed. Connection error.	(empty)
+
+# Start the HTTP server
+query I
+SELECT httpserve_start('127.0.0.1', 4000, '');
+----
+HTTP server started on 127.0.0.1:4000
+
+# Simple request
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?q=SELECT ''World'' AS Hello', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+200	OK	{"Hello":"World"}\n
+
+# Stop the HTTP server
+query I
+SELECT httpserve_stop();
+----
+HTTP server stopped
+
+# The HTTP server is not available anymore
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?q=SELECT ''World'' AS Hello', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+-1	HTTP GET request failed. Connection error.	(empty)
