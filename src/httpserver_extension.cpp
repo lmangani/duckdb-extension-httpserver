@@ -21,7 +21,7 @@
 #include "httplib.hpp"
 #include "yyjson.hpp"
 
-#include "play.h"
+#include "playground.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
 
@@ -255,7 +255,7 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
     // If no query found, return an error
     else {
         res.status = 200;
-        res.set_content(playContent, "text/html");
+        res.set_content(reinterpret_cast<char const*>(playgroundContent), "text/html");
         return;
     }
 
