@@ -325,8 +325,16 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     global_state.is_running = true;
     global_state.auth_token = auth.GetString();
 
+    // Custom basepath, defaults to root / 
+    const char* base_path_env = std::getenv("DUCKDB_HTTPSERVER_BASEPATH");
+    std::string base_path = "/"; 
+
+    if (base_path_env && base_path_env[0] == '/' && strlen(base_path_env) > 1) {
+        base_path = std::string(base_path_env);
+    }
+
     // CORS Preflight
-    global_state.server->Options("/",
+    global_state.server->Options(base_path,
     [](const duckdb_httplib_openssl::Request& /*req*/, duckdb_httplib_openssl::Response& res) {
         res.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
         res.set_header("Content-Type", "text/html; charset=utf-8");
@@ -341,8 +349,8 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     global_state.allocator = make_uniq<Allocator>();
 
     // Handle GET and POST requests
-    global_state.server->Get("/", HandleHttpRequest);
-    global_state.server->Post("/", HandleHttpRequest);
+    global_state.server->Get(base_path, HandleHttpRequest);
+    global_state.server->Post(base_path, HandleHttpRequest);
 
     // Health check endpoint
     global_state.server->Get("/ping", [](const duckdb_httplib_openssl::Request& req, duckdb_httplib_openssl::Response& res) {
