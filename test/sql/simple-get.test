@@ -1,0 +1,52 @@
+# name: test/sql/simple-get.test
+# description: test httpserver extension
+# group: [httpserver]
+
+################################################################
+# Setup
+################################################################
+
+require httpserver
+
+statement ok
+INSTALL http_client FROM community;
+
+statement ok
+LOAD http_client;
+
+statement ok
+INSTALL json;
+
+statement ok
+LOAD json;
+
+query I
+SELECT httpserve_start('127.0.0.1', 4000, '');
+----
+HTTP server started on 127.0.0.1:4000
+
+################################################################
+# Tests
+################################################################
+
+# SQL request in `q` parameter
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?q=SELECT 123', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+200	OK	{"123":"123"}\n
+
+# SQL request in `query` parameter
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?query=SELECT 123', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+200	OK	{"123":"123"}\n

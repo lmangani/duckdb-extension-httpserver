@@ -1,0 +1,129 @@
+# name: test/sql/auth.test
+# description: test httpserver extension
+# group: [httpserver]
+
+################################################################
+# Setup
+################################################################
+
+require httpserver
+
+statement ok
+INSTALL http_client FROM community;
+
+statement ok
+LOAD http_client;
+
+statement ok
+INSTALL json;
+
+statement ok
+LOAD json;
+
+################################################################
+# No auth test
+################################################################
+
+query I
+SELECT httpserve_start('127.0.0.1', 4000, '');
+----
+HTTP server started on 127.0.0.1:4000
+
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?q=SELECT 123', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+200	OK	{"123":"123"}\n
+
+query I
+SELECT httpserve_stop();
+----
+HTTP server stopped
+
+################################################################
+# Basic auth test
+################################################################
+
+query I
+SELECT httpserve_start('127.0.0.1', 4000, 'bob:pwd');
+----
+HTTP server started on 127.0.0.1:4000
+
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?q=SELECT 123', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+401	Unauthorized	Unauthorized
+
+query TTT
+WITH response AS (
+  SELECT http_get(
+    'http://127.0.0.1:4000/?q=SELECT 123',
+    MAP {
+      'Authorization': CONCAT('Basic ', TO_BASE64('bob:pwd'::BLOB)),
+    },
+    MAP {}
+  ) response
+)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+200	OK	{"123":"123"}\n
+
+query I
+SELECT httpserve_stop();
+----
+HTTP server stopped
+
+################################################################
+# Token test
+################################################################
+
+query I
+SELECT httpserve_start('127.0.0.1', 4000, 'my-api-key');
+----
+HTTP server started on 127.0.0.1:4000
+
+query TTT
+WITH response AS (SELECT http_get('http://127.0.0.1:4000/?q=SELECT 123', MAP {}, MAP {}) response)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+401	Unauthorized	Unauthorized
+
+query TTT
+WITH response AS (
+  SELECT http_get(
+    'http://127.0.0.1:4000/?q=SELECT 123',
+    MAP {
+      'X-API-Key': 'my-api-key',
+    },
+    MAP {}
+  ) response
+)
+SELECT
+  response->>'status',
+  response->>'reason',
+  regexp_replace(response->>'body', '[\r\n]+', '\\n')
+FROM response;
+----
+200	OK	{"123":"123"}\n
+
+query I
+SELECT httpserve_stop();
+----
+HTTP server stopped
