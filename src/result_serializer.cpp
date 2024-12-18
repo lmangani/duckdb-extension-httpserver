@@ -68,6 +68,19 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 	case LogicalTypeId::UBIGINT:
 		val = yyjson_mut_uint(doc, value.GetValue<uint64_t>());
 		break;
+
+	// format to big numbers as strings
+	case LogicalTypeId::UHUGEINT: {
+		const uhugeint_t uHugeIntNumber = value.GetValue<uhugeint_t>();
+		val = yyjson_mut_strcpy(doc, uHugeIntNumber.ToString().c_str());
+		break;
+	}
+	case LogicalTypeId::HUGEINT: {
+		const hugeint_t hugeIntNumber = value.GetValue<hugeint_t>();
+		val = yyjson_mut_strcpy(doc, hugeIntNumber.ToString().c_str());
+		break;
+	}
+
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL: {
@@ -75,12 +88,17 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 		if (std::isnan(real_val) || std::isinf(real_val)) {
 			if (set_invalid_values_to_null) {
 				goto null_handle;
+			} else {
+				const auto castedValue = value.DefaultCastAs(LogicalTypeId::VARCHAR).GetValue<string>();
+				val = yyjson_mut_strcpy(doc, castedValue.c_str());
+				break;
 			}
-			throw InvalidTypeException("NaN, Infinity, -Infinity are not supported");
+		} else {
+			val = yyjson_mut_real(doc, real_val);
+			break;
+
 		}
 
-		val = yyjson_mut_real(doc, real_val);
-		break;
 	}
 		// Data + time
 	case LogicalTypeId::DATE:
@@ -99,6 +117,10 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 	case LogicalTypeId::STRING_LITERAL:
 		val = yyjson_mut_strcpy(doc, value.GetValue<string>().c_str());
 		break;
+	case LogicalTypeId::VARINT:
+		val = yyjson_mut_strcpy(doc, value.DefaultCastAs(LogicalTypeId::VARCHAR).GetValue<string>().c_str());
+		break;
+		// UUID
 	case LogicalTypeId::UUID: {
 		const auto uuid_int = value.GetValue<hugeint_t>();
 		const auto uuid = UUID::ToString(uuid_int);
@@ -167,10 +189,9 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 		}
 		break;
 	}
-		// Unsupported types
+
+	// Unsupported types
 	case LogicalTypeId::TABLE:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::AGGREGATE_STATE:
@@ -185,7 +206,9 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 		throw InvalidTypeException("Type " + type.ToString() + " not supported");
 	}
 
-	D_ASSERT(val);
+	if (!val) {
+		throw InternalException("Could not serialize value of type " + type.ToString());
+	}
 	if (!name) {
 		if (!yyjson_mut_arr_append(parent, val)) {
 			throw InternalException("Could not add value to yyjson array");
@@ -194,9 +217,6 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 		yyjson_mut_val *key = yyjson_mut_strcpy(doc, name->c_str());
 		D_ASSERT(key);
 		if (!yyjson_mut_obj_add(parent, key, val)) {
-			throw InternalException("Could not add value to yyjson object");
-		}
-		if (!yyjson_mut_arr_add_val(parent, val)) {
 			throw InternalException("Could not add value to yyjson object");
 		}
 	}

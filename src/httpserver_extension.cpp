@@ -100,7 +100,7 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats
     yyjson_mut_obj_add_val(doc, root, "data", data_array);
 
     // Add row count
-    yyjson_mut_obj_add_int(doc, root, "rows", result.RowCount());
+    yyjson_mut_obj_add_uint(doc, root, "rows", result.RowCount());
     //"statistics":{"elapsed":0.00031403,"rows_read":1,"bytes_read":0}}
     auto stat_obj = yyjson_mut_obj_add_obj(doc, root, "statistics");
     yyjson_mut_obj_add_real(doc, stat_obj, "elapsed", req_stats.elapsed_sec);
