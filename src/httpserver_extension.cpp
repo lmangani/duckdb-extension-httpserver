@@ -366,28 +366,64 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
 
     if (debug_env != nullptr && std::string(debug_env) == "1") {
         global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
+            // Get current time with timezone offset
             time_t now_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            struct tm* tm_info = localtime(&now_time);
             char timestr[32];
-            strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", localtime(&now_time));
-            // Use \r\n for consistent line endings
-            fprintf(stdout, "[%s] %s %s - %d - from %s:%d\r\n",
-                timestr,
-                req.method.c_str(),
-                req.path.c_str(),
-                res.status,
-                req.remote_addr.c_str(),
-                req.remote_port);
+            char timezone[8];
+            strftime(timestr, sizeof(timestr), "%d/%b/%Y:%H:%M:%S", tm_info);
+            strftime(timezone, sizeof(timezone), "%z", tm_info);
+
+            size_t response_size = 0;
+            if (!res.body.empty()) {
+                response_size = res.body.size();
+            }
+            std::string user_agent = req.has_header("User-Agent") ? 
+                req.get_header_value("User-Agent") : "-";
+            std::string referer = req.has_header("Referer") ? 
+                req.get_header_value("Referer") : "-";
+            std::string forwarded_for = req.has_header("X-Forwarded-For") ? 
+                req.get_header_value("X-Forwarded-For") : "-";
+            fprintf(stdout, "%s - - [%s %s] \"%s %s HTTP/%s\" %d %zu \"%s\" \"%s\" \"%s\"\r\n",
+                req.remote_addr.c_str(),      // IP address
+                timestr,                      // Timestamp
+                timezone,                     // Timezone offset
+                req.method.c_str(),           // HTTP method
+                req.path.c_str(),             // Request path
+                req.version.c_str(),          // HTTP version
+                res.status,                   // Status code
+                response_size,                // Response size
+                referer.c_str(),              // Referer
+                user_agent.c_str(),           // User Agent
+                forwarded_for.c_str()         // X-Forwarded-For
+            );
             fflush(stdout);
         });
     } else if (use_syslog != nullptr && std::string(use_syslog) == "1") {
         openlog("duckdb-httpserver", LOG_PID | LOG_NDELAY, LOG_LOCAL0);
         global_state.server->set_logger([](const duckdb_httplib_openssl::Request& req, const duckdb_httplib_openssl::Response& res) {
-            syslog(LOG_INFO, "%s %s - %d - from %s:%d",
+            size_t response_size = 0;
+            if (!res.body.empty()) {
+                response_size = res.body.size();
+            }
+            std::string user_agent = req.has_header("User-Agent") ? 
+                req.get_header_value("User-Agent") : "-";
+             std::string referer = req.has_header("Referer") ? 
+                req.get_header_value("Referer") : "-";
+            std::string forwarded_for = req.has_header("X-Forwarded-For") ? 
+                req.get_header_value("X-Forwarded-For") : "-";
+
+            syslog(LOG_INFO, "%s - - \"%s %s HTTP/%s\" %d %zu \"%s\" \"%s\" \"%s\"",
+                req.remote_addr.c_str(),
                 req.method.c_str(),
                 req.path.c_str(),
+                req.version.c_str(),
                 res.status,
-                req.remote_addr.c_str(),
-                req.remote_port);
+                response_size,
+                referer.c_str(),
+                user_agent.c_str(),
+                forwarded_for.c_str()
+            );
         });
         std::atexit([]() {
             closelog();
