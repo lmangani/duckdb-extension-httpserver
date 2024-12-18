@@ -95,21 +95,8 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats
     }
     yyjson_mut_obj_add_val(doc, root, "meta", meta_array);
 
-    // Add data
-    auto data_array = yyjson_mut_arr(doc);
-    for (idx_t row = 0; row < result.RowCount(); ++row) {
-        auto row_array = yyjson_mut_arr(doc);
-        for (idx_t col = 0; col < result.ColumnCount(); ++col) {
-            Value value = result.GetValue(col, row);
-            if (value.IsNull()) {
-                yyjson_mut_arr_append(row_array, yyjson_mut_null(doc));
-            } else {
-                std::string value_str = value.ToString();
-                yyjson_mut_arr_append(row_array, yyjson_mut_strncpy(doc, value_str.c_str(), value_str.length()));
-            }
-        }
-        yyjson_mut_arr_append(data_array, row_array);
-    }
+    ResultSerializer serializer;
+    auto data_array = serializer.Serialize(result);
     yyjson_mut_obj_add_val(doc, root, "data", data_array);
 
     // Add row count

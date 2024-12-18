@@ -22,6 +22,7 @@ add_custom_command(
 
 set(EXTENSION_SOURCES
     src/httpserver_extension.cpp
+    src/result_serializer.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/playground.hpp
 )
 

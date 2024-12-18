@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "result_serializer.hpp"
 
 namespace duckdb {
 
