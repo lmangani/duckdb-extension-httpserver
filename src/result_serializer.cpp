@@ -1,4 +1,5 @@
 #include "result_serializer.hpp"
+#include <cmath>
 
 
 // ReSharper disable once CppPassValueParameterByConstReference
