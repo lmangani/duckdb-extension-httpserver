@@ -1,27 +1,23 @@
 #define DUCKDB_EXTENSION_MAIN
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+
+#include <chrono>
+#include <cstdlib>
+#include <thread>
 #include "httpserver_extension.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/allocator.hpp"
-#include <chrono>
-#include <thread>
-#include <memory>
-#include <cstdlib>
+#include "result_serializer.hpp"
+#include "httplib.hpp"
+#include "yyjson.hpp"
+#include "playground.hpp"
 
 #ifndef _WIN32
 #include <syslog.h>
 #endif
-
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.hpp"
-#include "yyjson.hpp"
-
-#include "playground.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
 
@@ -62,7 +58,7 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats
     auto meta_array = yyjson_mut_arr(doc);
     for (idx_t col = 0; col < result.ColumnCount(); ++col) {
         auto column_obj = yyjson_mut_obj(doc);
-        yyjson_mut_obj_add_str(doc, column_obj, "name", result.ColumnName(col).c_str());
+        yyjson_mut_obj_add_strcpy(doc, column_obj, "name", result.ColumnName(col).c_str());
         yyjson_mut_arr_append(meta_array, column_obj);
         std::string tp(GetColumnTypeName(result, col));
         yyjson_mut_obj_add_strcpy(doc, column_obj, "type", tp.c_str());
@@ -70,7 +66,7 @@ static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats
     yyjson_mut_obj_add_val(doc, root, "meta", meta_array);
 
     ResultSerializer serializer;
-    auto data_array = serializer.Serialize(result);
+    auto data_array = serializer.Serialize(result, true);
     yyjson_mut_obj_add_val(doc, root, "data", data_array);
 
     // Add row count
@@ -286,9 +282,9 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     global_state.is_running = true;
     global_state.auth_token = auth.GetString();
 
-    // Custom basepath, defaults to root / 
+    // Custom basepath, defaults to root /
     const char* base_path_env = std::getenv("DUCKDB_HTTPSERVER_BASEPATH");
-    std::string base_path = "/"; 
+    std::string base_path = "/";
 
     if (base_path_env && base_path_env[0] == '/' && strlen(base_path_env) > 1) {
         base_path = std::string(base_path_env);

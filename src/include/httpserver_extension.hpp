@@ -1,7 +1,6 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include "result_serializer.hpp"
 
 namespace duckdb {
 

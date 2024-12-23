@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from enum import Enum
 
 import httpx
@@ -21,7 +22,7 @@ class Client:
         self._basic_auth = basic_auth
         self._token_auth = token_auth
 
-    def execute_query(self, sql: str, response_format: ResponseFormat):
+    def execute_query(self, sql: str, response_format: ResponseFormat) -> dict:
         headers = {"format": response_format.value}
 
         if self._token_auth:
@@ -36,3 +37,20 @@ class Client:
             response = client.get(self._url, params={"q": sql}, headers=headers, auth=auth)
             response.raise_for_status()
             return response.json()
+
+
+    def ping(self) -> None:
+        with httpx.Client() as client:
+            response = client.get(f"{self._url}/ping")
+            response.raise_for_status()
+
+    def on_ready(self, timeout = 5) -> None:
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            try:
+                self.ping()
+                return
+            except Exception:
+                pass
+
+        raise TimeoutError("Server is not ready")
