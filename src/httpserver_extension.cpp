@@ -1,31 +1,29 @@
 #define DUCKDB_EXTENSION_MAIN
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+
+#include <chrono>
+#include <cstdlib>
+#include <thread>
 #include "httpserver_extension.hpp"
+#include "query_stats.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/allocator.hpp"
-#include <chrono>
-#include <thread>
-#include <memory>
-#include <cstdlib>
+#include "result_serializer.hpp"
+#include "result_serializer_compact_json.hpp"
+#include "httplib.hpp"
+#include "yyjson.hpp"
+#include "playground.hpp"
 
 #ifndef _WIN32
 #include <syslog.h>
 #endif
 
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.hpp"
-#include "yyjson.hpp"
-
-#include "playground.hpp"
-
-using namespace duckdb_yyjson; // NOLINT
-
 namespace duckdb {
+
+using namespace duckdb_yyjson;  // NOLINT(*-build-using-namespace)
 
 struct HttpServerState {
     std::unique_ptr<duckdb_httplib_openssl::Server> server;
@@ -39,98 +37,6 @@ struct HttpServerState {
 };
 
 static HttpServerState global_state;
-
-std::string GetColumnType(MaterializedQueryResult &result, idx_t column) {
-	if (result.RowCount() == 0) {
-		return "String";
-	}
-	switch (result.types[column].id()) {
-		case LogicalTypeId::FLOAT:
-			return "Float";
-		case LogicalTypeId::DOUBLE:
-			return "Double";
-		case LogicalTypeId::INTEGER:
-			return "Int32";
-		case LogicalTypeId::BIGINT:
-			return "Int64";
-		case LogicalTypeId::UINTEGER:
-			return "UInt32";
-		case LogicalTypeId::UBIGINT:
-			return "UInt64";
-		case LogicalTypeId::VARCHAR:
-			return "String";
-		case LogicalTypeId::TIME:
-			return "DateTime";
-		case LogicalTypeId::DATE:
-			return "Date";
-		case LogicalTypeId::TIMESTAMP:
-			return "DateTime";
-		case LogicalTypeId::BOOLEAN:
-			return "Int8";
-		default:
-			return "String";
-	}
-	return "String";
-}
-
-struct ReqStats {
-	float elapsed_sec;
-	int64_t read_bytes;
-	int64_t read_rows;
-};
-
-// Convert the query result to JSON format
-static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats &req_stats) {
-    auto doc = yyjson_mut_doc_new(nullptr);
-    auto root = yyjson_mut_obj(doc);
-    yyjson_mut_doc_set_root(doc, root);
-    // Add meta information
-    auto meta_array = yyjson_mut_arr(doc);
-    for (idx_t col = 0; col < result.ColumnCount(); ++col) {
-        auto column_obj = yyjson_mut_obj(doc);
-        yyjson_mut_obj_add_str(doc, column_obj, "name", result.ColumnName(col).c_str());
-        yyjson_mut_arr_append(meta_array, column_obj);
-        std::string tp(GetColumnType(result, col));
-        yyjson_mut_obj_add_strcpy(doc, column_obj, "type", tp.c_str());
-    }
-    yyjson_mut_obj_add_val(doc, root, "meta", meta_array);
-
-    // Add data
-    auto data_array = yyjson_mut_arr(doc);
-    for (idx_t row = 0; row < result.RowCount(); ++row) {
-        auto row_array = yyjson_mut_arr(doc);
-        for (idx_t col = 0; col < result.ColumnCount(); ++col) {
-            Value value = result.GetValue(col, row);
-            if (value.IsNull()) {
-                yyjson_mut_arr_append(row_array, yyjson_mut_null(doc));
-            } else {
-                std::string value_str = value.ToString();
-                yyjson_mut_arr_append(row_array, yyjson_mut_strncpy(doc, value_str.c_str(), value_str.length()));
-            }
-        }
-        yyjson_mut_arr_append(data_array, row_array);
-    }
-    yyjson_mut_obj_add_val(doc, root, "data", data_array);
-
-    // Add row count
-    yyjson_mut_obj_add_int(doc, root, "rows", result.RowCount());
-    //"statistics":{"elapsed":0.00031403,"rows_read":1,"bytes_read":0}}
-    auto stat_obj = yyjson_mut_obj_add_obj(doc, root, "statistics");
-    yyjson_mut_obj_add_real(doc, stat_obj, "elapsed", req_stats.elapsed_sec);
-    yyjson_mut_obj_add_int(doc, stat_obj, "rows_read", req_stats.read_rows);
-    yyjson_mut_obj_add_int(doc, stat_obj, "bytes_read", req_stats.read_bytes);
-    // Write to string
-    auto data = yyjson_mut_write(doc, 0, nullptr);
-    if (!data) {
-        yyjson_mut_doc_free(doc);
-        throw InternalException("Failed to render the result as JSON, yyjson failed");
-    }
-
-    std::string json_output(data);
-    free(data);
-    yyjson_mut_doc_free(doc);
-    return json_output;
-}
 
 // New: Base64 decoding function
 std::string base64_decode(const std::string &in) {
@@ -300,7 +206,8 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
             std::string json_output = ConvertResultToNDJSON(*result);
             res.set_content(json_output, "application/x-ndjson");
         } else if (format == "JSONCompact") {
-            std::string json_output = ConvertResultToJSON(*result, stats);
+        	ResultSerializerCompactJson serializer;
+        	std::string json_output = serializer.Serialize(*result, stats);
             res.set_content(json_output, "application/json");
         } else {
             // Default to NDJSON for DuckDB's own queries
@@ -325,9 +232,9 @@ void HttpServerStart(DatabaseInstance& db, string_t host, int32_t port, string_t
     global_state.is_running = true;
     global_state.auth_token = auth.GetString();
 
-    // Custom basepath, defaults to root / 
+    // Custom basepath, defaults to root /
     const char* base_path_env = std::getenv("DUCKDB_HTTPSERVER_BASEPATH");
-    std::string base_path = "/"; 
+    std::string base_path = "/";
 
     if (base_path_env && base_path_env[0] == '/' && strlen(base_path_env) > 1) {
         base_path = std::string(base_path_env);
