@@ -5,12 +5,14 @@
 #include <cstdlib>
 #include <thread>
 #include "httpserver_extension.hpp"
+#include "query_stats.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "result_serializer.hpp"
+#include "result_serializer_compact_json.hpp"
 #include "httplib.hpp"
 #include "yyjson.hpp"
 #include "playground.hpp"
@@ -19,9 +21,9 @@
 #include <syslog.h>
 #endif
 
-using namespace duckdb_yyjson; // NOLINT
-
 namespace duckdb {
+
+using namespace duckdb_yyjson;  // NOLINT(*-build-using-namespace)
 
 struct HttpServerState {
     std::unique_ptr<duckdb_httplib_openssl::Server> server;
@@ -41,52 +43,6 @@ std::string GetColumnTypeName(MaterializedQueryResult &result, idx_t column) {
 		return "String";
 	}
 	return result.types[column].ToString();
-}
-
-struct ReqStats {
-	float elapsed_sec;
-	int64_t read_bytes;
-	int64_t read_rows;
-};
-
-// Convert the query result to JSON format
-static std::string ConvertResultToJSON(MaterializedQueryResult &result, ReqStats &req_stats) {
-    auto doc = yyjson_mut_doc_new(nullptr);
-    auto root = yyjson_mut_obj(doc);
-    yyjson_mut_doc_set_root(doc, root);
-    // Add meta information
-    auto meta_array = yyjson_mut_arr(doc);
-    for (idx_t col = 0; col < result.ColumnCount(); ++col) {
-        auto column_obj = yyjson_mut_obj(doc);
-        yyjson_mut_obj_add_strcpy(doc, column_obj, "name", result.ColumnName(col).c_str());
-        yyjson_mut_arr_append(meta_array, column_obj);
-        std::string tp(GetColumnTypeName(result, col));
-        yyjson_mut_obj_add_strcpy(doc, column_obj, "type", tp.c_str());
-    }
-    yyjson_mut_obj_add_val(doc, root, "meta", meta_array);
-
-    ResultSerializer serializer;
-    auto data_array = serializer.Serialize(result, true);
-    yyjson_mut_obj_add_val(doc, root, "data", data_array);
-
-    // Add row count
-    yyjson_mut_obj_add_uint(doc, root, "rows", result.RowCount());
-    //"statistics":{"elapsed":0.00031403,"rows_read":1,"bytes_read":0}}
-    auto stat_obj = yyjson_mut_obj_add_obj(doc, root, "statistics");
-    yyjson_mut_obj_add_real(doc, stat_obj, "elapsed", req_stats.elapsed_sec);
-    yyjson_mut_obj_add_int(doc, stat_obj, "rows_read", req_stats.read_rows);
-    yyjson_mut_obj_add_int(doc, stat_obj, "bytes_read", req_stats.read_bytes);
-    // Write to string
-    auto data = yyjson_mut_write(doc, 0, nullptr);
-    if (!data) {
-        yyjson_mut_doc_free(doc);
-        throw InternalException("Failed to render the result as JSON, yyjson failed");
-    }
-
-    std::string json_output(data);
-    free(data);
-    yyjson_mut_doc_free(doc);
-    return json_output;
 }
 
 // New: Base64 decoding function
@@ -257,7 +213,8 @@ void HandleHttpRequest(const duckdb_httplib_openssl::Request& req, duckdb_httpli
             std::string json_output = ConvertResultToNDJSON(*result);
             res.set_content(json_output, "application/x-ndjson");
         } else if (format == "JSONCompact") {
-            std::string json_output = ConvertResultToJSON(*result, stats);
+        	ResultSerializerCompactJson serializer;
+        	std::string json_output = serializer.Serialize(*result, stats);
             res.set_content(json_output, "application/json");
         } else {
             // Default to NDJSON for DuckDB's own queries

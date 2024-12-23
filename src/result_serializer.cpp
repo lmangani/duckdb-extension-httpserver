@@ -1,23 +1,33 @@
 #include "result_serializer.hpp"
+
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
+
 #include <cmath>
 
-// ReSharper disable once CppPassValueParameterByConstReference
-yyjson_mut_val *duckdb::ResultSerializer::Serialize(QueryResult &query_result, bool values_as_array) {
+namespace duckdb {
+
+#define YY_APPEND_FAIL(success)                                                                                        \
+	if (!success) {                                                                                                    \
+		throw SerializationException("Failed to append in " __FILE__, __LINE__);                                       \
+	}
+
+void ResultSerializer::SerializeInternal(QueryResult &query_result, yyjson_mut_val *append_root,
+                                         const bool values_as_array) {
 	auto chunk = query_result.Fetch();
 	auto names = query_result.names;
 	auto types = query_result.types;
+
 	while (chunk) {
-		SerializeChunk(*chunk, names, types, values_as_array);
+		SerializeChunk(*chunk, names, types, append_root, values_as_array);
 		chunk = query_result.Fetch();
 	}
-
-	return root;
 }
 
-void duckdb::ResultSerializer::SerializeChunk(const DataChunk &chunk, vector<string> &names, vector<LogicalType> &types,
-                                              bool values_as_array) {
+void ResultSerializer::SerializeChunk(const DataChunk &chunk, vector<string> &names, vector<LogicalType> &types,
+                                      yyjson_mut_val *append_root, const bool values_as_array) {
+	D_ASSERT(yyjson_mut_is_arr(append_root));
+
 	const auto row_count = chunk.size();
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -31,14 +41,12 @@ void duckdb::ResultSerializer::SerializeChunk(const DataChunk &chunk, vector<str
 			obj = SerializeRowAsObject(chunk, row_idx, names, types);
 		}
 
-		if (!yyjson_mut_arr_append(root, obj)) {
-			throw SerializationException("Could not add object to yyjson array");
-		}
+		YY_APPEND_FAIL(yyjson_mut_arr_append(append_root, obj));
 	}
 }
 
-yyjson_mut_val *duckdb::ResultSerializer::SerializeRowAsArray(const DataChunk &chunk, idx_t row_idx,
-                                                              vector<LogicalType> &types) {
+yyjson_mut_val *ResultSerializer::SerializeRowAsArray(const DataChunk &chunk, const idx_t row_idx,
+                                                      vector<LogicalType> &types) {
 	const auto column_count = chunk.ColumnCount();
 	auto obj = yyjson_mut_arr(doc);
 
@@ -51,8 +59,8 @@ yyjson_mut_val *duckdb::ResultSerializer::SerializeRowAsArray(const DataChunk &c
 	return obj;
 }
 
-yyjson_mut_val *duckdb::ResultSerializer::SerializeRowAsObject(const DataChunk &chunk, idx_t row_idx,
-                                                               vector<string> &names, vector<LogicalType> &types) {
+yyjson_mut_val *ResultSerializer::SerializeRowAsObject(const DataChunk &chunk, const idx_t row_idx,
+                                                       vector<string> &names, vector<LogicalType> &types) {
 	const auto column_count = chunk.ColumnCount();
 	auto obj = yyjson_mut_obj(doc);
 
@@ -65,7 +73,7 @@ yyjson_mut_val *duckdb::ResultSerializer::SerializeRowAsObject(const DataChunk &
 	return obj;
 }
 
-void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
+void ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
     yyjson_mut_val *parent, const Value &value, optional_ptr<string> name, const LogicalType &type) {
 	yyjson_mut_val *val = nullptr;
 
@@ -234,17 +242,12 @@ void duckdb::ResultSerializer::SerializeValue( // NOLINT(*-no-recursion)
 		throw SerializationException("Could not serialize value of type " + type.ToString());
 	}
 	if (!name) {
-		if (!yyjson_mut_arr_append(parent, val)) {
-			throw SerializationException("Could not add value to yyjson array");
-		}
+		YY_APPEND_FAIL(yyjson_mut_arr_append(parent, val));
 	} else {
 		yyjson_mut_val *key = yyjson_mut_strcpy(doc, name->c_str());
-		if (!key) {
-			throw SerializationException("Could not create yyjson key");
-		}
-
-		if (!yyjson_mut_obj_add(parent, key, val)) {
-			throw SerializationException("Could not add value to yyjson object");
-		}
+		D_ASSERT(key);
+		YY_APPEND_FAIL(yyjson_mut_obj_add(parent, key, val));
 	}
 }
+
+} // namespace duckdb
