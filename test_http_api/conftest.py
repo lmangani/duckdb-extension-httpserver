@@ -30,8 +30,3 @@ def http_duck_with_token() -> Iterator[Client]:
     yield client
 
     process.kill()
-
-
-@pytest.fixture
-def token_client():
-    return Client(f"http://{HOST}:{PORT}", token_auth=API_KEY)

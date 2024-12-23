@@ -38,13 +38,6 @@ struct HttpServerState {
 
 static HttpServerState global_state;
 
-std::string GetColumnTypeName(MaterializedQueryResult &result, idx_t column) {
-	if (result.RowCount() == 0) {
-		return "String";
-	}
-	return result.types[column].ToString();
-}
-
 // New: Base64 decoding function
 std::string base64_decode(const std::string &in) {
     std::string out;

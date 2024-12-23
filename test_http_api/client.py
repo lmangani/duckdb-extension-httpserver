@@ -9,7 +9,6 @@ from httpx import BasicAuth
 
 class ResponseFormat(Enum):
     ND_JSON = "JSONEachRow"
-    JSON = "JSON"
     COMPACT_JSON = "JSONCompact"
 
 
