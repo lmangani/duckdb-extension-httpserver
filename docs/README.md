@@ -142,7 +142,7 @@ You can now have DuckDB instances query each other and... _themselves!_
 ```sql
 D LOAD json;
 D LOAD httpfs;
-D SELECT httpserve_start('0.0.0.0', 9999);
+D SELECT httpserve_start('0.0.0.0', 9999, '');
 ┌─────────────────────────────────────┐
 │  httpserve_start('0.0.0.0', 9999)   │
 │               varchar               │
